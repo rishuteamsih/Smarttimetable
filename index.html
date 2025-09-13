@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart Timetable – Login & Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Segoe UI", Roboto, Arial, sans-serif; }
+    body { min-height: 100vh; background: #f2f4f8; padding: 20px; }
+    .view { display: none; }
+    .container { position: relative; width: min(900px, 95%); height: 550px; background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.08); margin: auto; margin-top: 20px; }
+    .form-container { position: absolute; top: 0; height: 100%; transition: all 0.6s ease-in-out; }
+    .sign-in-container { left: 0; width: 50%; z-index: 2; }
+    .sign-up-container { left: 0; width: 50%; opacity: 0; z-index: 1; }
+    form { background: #fff; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 50px; text-align: center; }
+    form h1 { color: #18ab91; margin-bottom: 14px; font-weight: 700; letter-spacing: .2px; }
+    input, select { width: 100%; max-width: 320px; padding: 12px 14px; margin: 8px 0; border-radius: 8px; border: none; background: #f0f1f3; }
+    button { margin-top: 14px; padding: 12px 42px; border-radius: 999px; border: none; background: #18ab91; color: #fff; font-weight: 700; letter-spacing: 0.6px; cursor: pointer; transition: transform .08s ease; }
+    button:active { transform: scale(.98); }
+    button.ghost { background: transparent; border: 2px solid rgba(255,255,255,0.35); color: #fff; padding: 10px 30px; }
+    .overlay-container { position: absolute; top: 0; left: 50%; width: 50%; height: 100%; overflow: hidden; transition: transform 0.6s ease-in-out; z-index: 100; }
+    .overlay { position: relative; left: -100%; width: 200%; height: 100%; display: flex; align-items: center; transition: transform 0.6s ease-in-out; background: linear-gradient(90deg, #20b39a 0%, #17a88a 100%); color: #fff; }
+    .overlay-panel { width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 40px; text-align: center; }
+    .overlay-panel h1 { font-size: 28px; margin-bottom: 8px; }
+    .overlay-panel p { opacity: .95; max-width: 320px; line-height: 1.4; }
+    .container.right-panel-active .sign-in-container { transform: translateX(100%); opacity: 0; z-index: 1; }
+    .container.right-panel-active .sign-up-container { transform: translateX(100%); opacity: 1; z-index: 5; }
+    .container.right-panel-active .overlay-container { transform: translateX(-100%); }
+    .container.right-panel-active .overlay { transform: translateX(50%); }
+    header { background: #18ab91; color: #fff; padding: 20px; text-align: center; }
+    main { padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 8px; border-bottom: 1px solid #ccc; text-align: left; }
+  </style>
+</head>
+<body>
+
+  <!-- LOGIN / SIGNUP VIEW -->
+  <div id="loginView" class="view" style="display:block;">
+    <div class="container" id="container">
+      <!-- Sign Up -->
+      <div class="form-container sign-up-container">
+        <form id="signupForm">
+          <h1>Create Account</h1>
+          <span style="opacity:.8;margin-bottom:10px;">Use your email for registration</span>
+          <input id="signupName" type="text" placeholder="Name" required />
+          <input id="signupEmail" type="email" placeholder="Email" required />
+          <input id="signupPassword" type="password" placeholder="Password" required />
+          <select id="signupRole" required>
+            <option value="" disabled selected>Select your role</option>
+            <option value="student">Student</option>
+            <option value="faculty">Faculty</option>
+          </select>
+          <button type="submit">Sign Up</button>
+        </form>
+      </div>
+
+      <!-- Sign In -->
+      <div class="form-container sign-in-container">
+        <form id="loginForm">
+          <h1>Sign In</h1>
+          <input id="loginEmail" type="email" placeholder="Email" required />
+          <input id="loginPassword" type="password" placeholder="Password" required />
+          <button type="submit">Login</button>
+        </form>
+      </div>
+
+      <!-- Overlay -->
+      <div class="overlay-container">
+        <div class="overlay">
+          <div class="overlay-panel overlay-left">
+            <h1>Welcome Back!</h1>
+            <p>To keep connected with us please login with your personal info</p>
+            <button class="ghost" id="signIn">Sign In</button>
+          </div>
+          <div class="overlay-panel overlay-right">
+            <h1>Hello, Friend!</h1>
+            <p>Enter your details and start your journey with us</p>
+            <button class="ghost" id="signUp">Sign Up</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FACULTY DASHBOARD -->
+  <div id="facultyView" class="view">
+    <header><h1>Faculty / Admin Dashboard</h1></header>
+    <main>
+      <p>Welcome, you are logged in as Faculty/Admin.</p>
+      <h3>Pending Signups:</h3>
+      <table id="pendingTable">
+        <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <button id="logoutBtnFaculty">Logout</button>
+    </main>
+  </div>
+
+  <!-- STUDENT DASHBOARD -->
+  <div id="studentView" class="view">
+    <header><h1>Student Dashboard</h1></header>
+    <main>
+      <p>Welcome, you are logged in as Student.</p>
+      <button id="logoutBtnStudent">Logout</button>
+    </main>
+  </div>
+
+  <!-- Firebase + App logic -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } 
+      from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, query, where, onSnapshot, serverTimestamp } 
+      from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAFKmM22FUSQPYy-eMsBzcZN3bmAxglXl0",
+      authDomain: "smart-timetable-266fe.firebaseapp.com",
+      projectId: "smart-timetable-266fe",
+      storageBucket: "smart-timetable-266fe.firebasestorage.app",
+      messagingSenderId: "843230713835",
+      appId: "1:843230713835:web:b97d024f4fcf9a40ceabae",
+      measurementId: "G-DDY9NVEK8R"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    function showView(id) {
+      document.querySelectorAll('.view').forEach(v => v.style.display='none');
+      document.getElementById(id).style.display='block';
+    }
+    function msg(t){ alert(t); }
+
+    // toggle panels
+    (function () {
+      const container = document.getElementById('container');
+      document.getElementById('signUp').addEventListener('click', () => container.classList.add('right-panel-active'));
+      document.getElementById('signIn').addEventListener('click', () => container.classList.remove('right-panel-active'));
+    })();
+
+    // Signup
+    document.getElementById('signupForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value.trim();
+      const password = document.getElementById('signupPassword').value.trim();
+      const role = document.getElementById('signupRole').value;
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const uid = cred.user.uid;
+        await setDoc(doc(db, 'users', uid), {
+          name, email, role, approved: false, uid, createdAt: serverTimestamp()
+        });
+        msg('Account created! Waiting for approval by admin.');
+        document.getElementById('container').classList.remove('right-panel-active');
+        await signOut(auth);
+      } catch(err){ console.error(err); msg('Signup error: ' + err.message); }
+    });
+
+    // Login
+    document.getElementById('loginForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch(err){ console.error(err); msg('Login failed: ' + err.message); }
+    });
+
+    document.getElementById('logoutBtnFaculty').addEventListener('click', async ()=>{ await signOut(auth); showView('loginView'); });
+    document.getElementById('logoutBtnStudent').addEventListener('click', async ()=>{ await signOut(auth); showView('loginView'); });
+
+    // Real-time pending users listener for admin
+    let unsubscribePending = null;
+    function loadPendingRealtime(){
+      if (unsubscribePending) unsubscribePending();
+      const q = query(collection(db, 'users'), where('approved', '==', false));
+      unsubscribePending = onSnapshot(q, (snap)=>{
+        const tbody = document.querySelector('#pendingTable tbody');
+        tbody.innerHTML = '';
+        snap.forEach(docSnap => {
+          const data = docSnap.data();
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${escapeHtml(data.email)}</td>
+                          <td>${escapeHtml(data.role||'')}</td>
+                          <td>${data.approved? 'Approved':'Pending'}</td>
+                          <td><button data-uid="${docSnap.id}">Approve</button></td>`;
+          tbody.appendChild(tr);
+        });
+        tbody.querySelectorAll('button').forEach(btn=>{
+          btn.onclick = async ()=> {
+            const uid = btn.getAttribute('data-uid');
+            if (!confirm('Approve this user?')) return;
+            try { await updateDoc(doc(db,'users',uid), { approved: true }); alert('User approved!'); }
+            catch(err) { console.error(err); alert('Failed to approve: ' + err.message); }
+          };
+        });
+      }, err => { console.error('pending snapshot err', err); });
+    }
+
+    onAuthStateChanged(auth, async (user)=>{
+      if (!user) {
+        showView('loginView');
+        if (unsubscribePending) { unsubscribePending(); unsubscribePending = null; }
+        return;
+      }
+      try {
+        const docSnap = await getDoc(doc(db, 'users', user.uid));
+        if (!docSnap.exists()){
+          await signOut(auth);
+          alert('Profile not found. Contact admin.');
+          return;
+        }
+        const profile = docSnap.data();
+        if (!profile.approved){
+          await signOut(auth);
+          alert('Your account is still pending approval.');
+          return;
+        }
+        if (profile.role === 'faculty') {
+          showView('facultyView');
+          loadPendingRealtime();
+        } else {
+          showView('studentView');
+        }
+      } catch(err){
+        console.error(err);
+        alert('Auth check error: ' + err.message);
+      }
+    });
+
+    function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m])); }
+  </script>
+</body>
+</html>
