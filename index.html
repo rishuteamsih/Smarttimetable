@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Smart Timetable – Login & Dashboard</title>
+  <title>Campus Connect – Login & Dashboard</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Segoe UI", Roboto, Arial, sans-serif; }
     body { min-height: 100vh; background: #f2f4f8; padding: 20px; }
@@ -27,11 +27,70 @@
     .container.right-panel-active .sign-up-container { transform: translateX(100%); opacity: 1; z-index: 5; }
     .container.right-panel-active .overlay-container { transform: translateX(-100%); }
     .container.right-panel-active .overlay { transform: translateX(50%); }
-    header { background: #18ab91; color: #fff; padding: 20px; text-align: center; }
+    header { background: #18ab91; color: #fff; padding: 20px; position: relative; }
+    header h1 { text-align: center; }
+    .logo-container { position: absolute; top: 10px; right: 20px; }
+    .app-logo { height: 50px; width: auto; }
+
     main { padding: 20px; }
+
+    /* Chat Buttons */
+    .chat-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      max-width: 250px;
+      margin-top: 10px;
+    }
+    .chat-btn {
+      display: block;
+      padding: 12px;
+      text-align: center;
+      border: 2px solid #18ab91;
+      border-radius: 10px;
+      color: #18ab91;
+      text-decoration: none;
+      font-weight: 600;
+      background: #fff;
+      transition: 0.3s;
+    }
+    .chat-btn:hover {
+      background: #18ab91;
+      color: #fff;
+    }
+
+    /* Logout button */
+    .logout-btn {
+      margin-top: 30px;
+      padding: 12px 25px;
+      border-radius: 10px;
+      border: none;
+      background: #18ab91;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .logout-btn:hover {
+      background: #13967d;
+    }
+
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { padding: 8px; border-bottom: 1px solid #ccc; text-align: left; }
-    .chat-links a { display:block; margin:5px 0; color:#18ab91; text-decoration:none; }
+    table button {
+      padding: 8px 15px;
+      border-radius: 8px;
+      border: 2px solid #18ab91;
+      background: #fff;
+      color: #18ab91;
+      cursor: pointer;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+    table button:hover {
+      background: #18ab91;
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -86,7 +145,12 @@
 
   <!-- FACULTY DASHBOARD -->
   <div id="facultyView" class="view">
-    <header><h1>Faculty / Admin Dashboard</h1></header>
+    <header>
+      <h1>Faculty / Admin Dashboard</h1>
+      <div class="logo-container">
+        <img src="Screenshot_2025-10-04_225758-removebg-preview.png" alt="Campus Connect" class="app-logo">
+      </div>
+    </header>
     <main>
       <p>Welcome, you are logged in as Faculty/Admin.</p>
       <h3>Pending Signups:</h3>
@@ -94,26 +158,31 @@
         <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead>
         <tbody></tbody>
       </table>
-      <button id="logoutBtnFaculty">Logout</button>
+      <button id="logoutBtnFaculty" class="logout-btn">Logout</button>
     </main>
   </div>
 
   <!-- STUDENT DASHBOARD -->
   <div id="studentView" class="view">
-    <header><h1>Student Dashboard</h1></header>
+    <header>
+      <h1>Student Dashboard</h1>
+      <div class="logo-container">
+        <img src="Screenshot_2025-10-04_225758-removebg-preview.png" alt="Campus Connect" class="app-logo">
+      </div>
+    </header>
     <main>
       <p>Welcome, you are logged in as Student.</p>
 
-      <!-- Chat Links (minimal, non-invasive) -->
-      <section id="chatLinks" class="chat-links" style="margin-top:20px;">
-        <h3>Chat Options</h3>
-        <a href="chat.html" target="_blank">🌐 Global Chat</a>
-        <a href="private.html" target="_blank">💬 Private Chat</a>
-        <a href="groups.html" target="_blank">👥 Groups</a>
+      <section id="chatLinks">
+        <h3 style="margin-bottom:15px;">Chat Options</h3>
+        <div class="chat-buttons">
+          <a href="chat.html" target="_blank" class="chat-btn">🌐 Global Chat</a>
+          <a href="private.html" target="_blank" class="chat-btn">💬 Private Chat</a>
+          <a href="groups.html" target="_blank" class="chat-btn">👥 Groups</a>
+        </div>
       </section>
 
-      <br>
-      <button id="logoutBtnStudent">Logout</button>
+      <button id="logoutBtnStudent" class="logout-btn">Logout</button>
     </main>
   </div>
 
@@ -125,7 +194,7 @@
     import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, query, where, onSnapshot, serverTimestamp } 
       from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-    // Your Firebase config
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAFKmM22FUSQPYy-eMsBzcZN3bmAxglXl0",
       authDomain: "smart-timetable-266fe.firebaseapp.com",
@@ -182,7 +251,7 @@
       } catch(err){ console.error(err); msg('Login failed: ' + err.message); }
     });
 
-    // Logout handlers — remove chatUser too
+    // Logout handlers
     document.getElementById('logoutBtnFaculty').addEventListener('click', async ()=>{
       await signOut(auth);
       localStorage.removeItem('chatUser');
@@ -194,7 +263,7 @@
       showView('loginView');
     });
 
-    // Real-time pending users listener for admin (DOM-safe)
+    // Faculty realtime pending signups
     let unsubscribePending = null;
     function loadPendingRealtime(){
       if (unsubscribePending) unsubscribePending();
