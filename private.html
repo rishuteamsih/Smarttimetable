@@ -5,104 +5,23 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Private Chat</title>
   <style>
-    body {
-      margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #ece5dd;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px;
-      background: #128c7e;
-      color: #fff;
-    }
-    #backBtn {
-      background: none;
-      border: none;
-      color: #fff;
-      font-size: 20px;
-      cursor: pointer;
-    }
-    #friendName {
-      flex: 1;
-      font-weight: 600;
-      font-size: 16px;
-    }
-    .chat-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: #efeae2;
-      border-radius: 8px;
-      width: 100%;
-      max-width: 600px;
-      margin: auto;
-      box-shadow: 0 0 8px rgba(0,0,0,0.2);
-    }
-    #messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-    }
-    .bubble {
-      margin: 6px 0;
-      padding: 10px 14px;
-      border-radius: 18px;
-      max-width: 70%;
-      word-wrap: break-word;
-      position: relative;
-      box-shadow: 0 1px 1px rgba(0,0,0,0.2);
-    }
-    .mine {
-      background: #dcf8c6;
-      align-self: flex-end;
-    }
-    .theirs {
-      background: #fff;
-      align-self: flex-start;
-    }
-    .time {
-      font-size: 11px;
-      opacity: 0.7;
-      margin-top: 4px;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 4px;
-    }
-    .input-box {
-      display: flex;
-      padding: 8px 12px;
-      background: #f0f0f0;
-    }
-    .input-box input {
-      flex: 1;
-      padding: 10px;
-      border: none;
-      outline: none;
-      border-radius: 20px;
-    }
-    .input-box button {
-      margin-left: 10px;
-      background: #128c7e;
-      color: white;
-      border: none;
-      border-radius: 50%;
-      width: 42px;
-      height: 42px;
-      cursor: pointer;
-      font-size: 18px;
-    }
-    .input-box button:hover {
-      background: #0d7568;
-    }
+    body { margin:0; font-family:"Segoe UI",Arial,sans-serif; background:#ece5dd; display:flex; flex-direction:column; height:100vh; }
+    header { display:flex; align-items:center; gap:10px; padding:12px; background:#128c7e; color:#fff; }
+    #backBtn { background:none; border:none; color:#fff; font-size:20px; cursor:pointer; }
+    #friendName { flex:1; font-weight:600; font-size:16px; }
+    .chat-container { flex:1; display:flex; flex-direction:column; background:#efeae2; }
+    #searchBar { padding:10px; background:#f0f0f0; display:flex; gap:8px; }
+    #searchEmail { flex:1; padding:8px; border-radius:6px; border:1px solid #ccc; }
+    #findBtn { padding:8px 14px; border:none; border-radius:6px; background:#128c7e; color:#fff; cursor:pointer; }
+    #messages { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; }
+    .bubble { margin:6px 0; padding:10px 14px; border-radius:18px; max-width:70%; word-wrap:break-word; position:relative; box-shadow:0 1px 1px rgba(0,0,0,0.2); }
+    .mine { background:#dcf8c6; align-self:flex-end; }
+    .theirs { background:#fff; align-self:flex-start; }
+    .time { font-size:11px; opacity:0.7; margin-top:4px; display:flex; justify-content:flex-end; align-items:center; gap:4px; }
+    .input-box { display:flex; padding:8px 12px; background:#f0f0f0; }
+    .input-box input { flex:1; padding:10px; border:none; outline:none; border-radius:20px; }
+    .input-box button { margin-left:10px; background:#128c7e; color:white; border:none; border-radius:50%; width:42px; height:42px; cursor:pointer; font-size:18px; }
+    .input-box button:hover { background:#0d7568; }
   </style>
 </head>
 <body>
@@ -112,22 +31,28 @@
   </header>
 
   <div class="chat-container">
+    <!-- Search bar to find a friend -->
+    <div id="searchBar">
+      <input id="searchEmail" placeholder="Enter friend's email..." />
+      <button id="findBtn">Find</button>
+    </div>
+
     <div id="messages"></div>
+
     <div class="input-box">
       <input id="msgInput" type="text" placeholder="Type a message...">
       <button id="sendBtn">➤</button>
     </div>
   </div>
 
-  <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { 
-      getFirestore, collection, addDoc, query, orderBy, onSnapshot, 
-      serverTimestamp, updateDoc, doc, arrayUnion 
+      getFirestore, collection, addDoc, query, where, getDocs, orderBy, onSnapshot, 
+      serverTimestamp, updateDoc, doc, arrayUnion, getDoc, setDoc 
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // 🔥 Your Firebase config
+    // Firebase config (same as your project)
     const firebaseConfig = {
       apiKey: "AIzaSyAFKmM22FUSQPYy-eMsBzcZN3bmAxglXl0",
       authDomain: "smart-timetable-266fe.firebaseapp.com",
@@ -136,47 +61,56 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Logged-in user (from localStorage, set in index.html after login)
+    // logged-in user (saved in index.html)
     const me = JSON.parse(localStorage.getItem("chatUser") || "{}");
     if (!me.uid) { document.body.innerHTML="<p>Please login first.</p>"; throw "no-login"; }
 
-    // Dummy friend for demo (replace with your logic after selecting a friend)
-    const chatId = "demoChat"; 
-    const friend = { uid: "user2", name: "Amit" };
-    document.getElementById("friendName").textContent = friend.name;
+    let currentChatId = null;
+    let currentFriend = null;
 
+    const backBtn = document.getElementById("backBtn");
+    const findBtn = document.getElementById("findBtn");
     const messagesDiv = document.getElementById("messages");
     const input = document.getElementById("msgInput");
     const sendBtn = document.getElementById("sendBtn");
 
-    // --- Back Button ---
-    document.getElementById("backBtn").addEventListener("click", () => {
-      window.location.href = "index (13).html"; // back to dashboard
+    // --- Back to student dashboard
+    backBtn.addEventListener("click", () => {
+      window.location.href = "index (13).html";
     });
 
-    // --- Send Message ---
-    async function sendMessage() {
-      const text = input.value.trim();
-      if (!text) return;
-      await addDoc(collection(db, "privateChats", chatId, "messages"), {
-        senderUid: me.uid,
-        text,
-        timestamp: serverTimestamp(),
-        seenBy: [me.uid]
-      });
-      input.value = "";
-    }
-    sendBtn.addEventListener("click", sendMessage);
-    input.addEventListener("keypress", e => { if (e.key === "Enter") sendMessage(); });
+    // --- Search for friend by email
+    findBtn.addEventListener("click", async () => {
+      const email = document.getElementById("searchEmail").value.trim().toLowerCase();
+      if (!email) return alert("Enter email");
 
-    // --- Mark message as seen ---
-    async function markSeen(docId) {
-      const msgRef = doc(db, "privateChats", chatId, "messages", docId);
-      await updateDoc(msgRef, { seenBy: arrayUnion(me.uid) });
-    }
+      const q = query(collection(db,"users"), where("email","==", email));
+      const snap = await getDocs(q);
+      if (snap.empty) return alert("No user found with that email");
 
-    // --- Load Messages ---
-    function loadMessages(chatId) {
+      const friendDoc = snap.docs[0];
+      currentFriend = { uid: friendDoc.id, ...friendDoc.data() };
+
+      // Update header with friend's name
+      document.getElementById("friendName").textContent = currentFriend.name || currentFriend.email;
+
+      // Start chat
+      startPrivateChat(currentFriend.uid);
+    });
+
+    // --- Start a chat (creates chatId from 2 UIDs)
+    async function startPrivateChat(friendUid) {
+      const chatId = [me.uid, friendUid].sort().join("_");
+      currentChatId = chatId;
+
+      // Ensure chat doc exists
+      const chatRef = doc(db, "privateChats", chatId);
+      const chatSnap = await getDoc(chatRef);
+      if (!chatSnap.exists()) {
+        await setDoc(chatRef, { members: [me.uid, friendUid], created: serverTimestamp() });
+      }
+
+      // Listen to messages
       const msgQ = query(collection(db, "privateChats", chatId, "messages"), orderBy("timestamp"));
       onSnapshot(msgQ, snap => {
         messagesDiv.innerHTML = "";
@@ -204,33 +138,22 @@
           tSpan.textContent = timeText;
           timeDiv.appendChild(tSpan);
 
-          // ticks (only for my messages)
+          // ticks for my messages
           if (m.senderUid === me.uid) {
             const tickSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-            tickSvg.setAttribute("width", "14");
-            tickSvg.setAttribute("height", "14");
-            tickSvg.setAttribute("viewBox", "0 0 24 24");
-            const path1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path1.setAttribute("d", "M1.5 13l4.5 4.5L15 8.5");
-            path1.setAttribute("fill", "none");
-            path1.setAttribute("stroke-width", "2");
-            path1.setAttribute("stroke-linecap", "round");
-            path1.setAttribute("stroke-linejoin", "round");
-            const path2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path2.setAttribute("d", "M9 13l4.5 4.5L22.5 8.5");
-            path2.setAttribute("fill", "none");
-            path2.setAttribute("stroke-width", "2");
-            path2.setAttribute("stroke-linecap", "round");
-            path2.setAttribute("stroke-linejoin", "round");
-            const seenByOthers = (m.seenBy || []).filter(uid => uid !== me.uid);
-            const color = seenByOthers.length > 0 ? "#34b7f1" : "#777";
-            path1.setAttribute("stroke", color);
-            path2.setAttribute("stroke", color);
-            tickSvg.appendChild(path1);
-            tickSvg.appendChild(path2);
+            tickSvg.setAttribute("width","14"); tickSvg.setAttribute("height","14"); tickSvg.setAttribute("viewBox","0 0 24 24");
+            const path1 = document.createElementNS("http://www.w3.org/2000/svg","path");
+            path1.setAttribute("d","M1.5 13l4.5 4.5L15 8.5");
+            path1.setAttribute("fill","none"); path1.setAttribute("stroke-width","2");
+            const path2 = document.createElementNS("http://www.w3.org/2000/svg","path");
+            path2.setAttribute("d","M9 13l4.5 4.5L22.5 8.5");
+            path2.setAttribute("fill","none"); path2.setAttribute("stroke-width","2");
+            const seenByOthers = (m.seenBy||[]).filter(uid=>uid!==me.uid);
+            const color = seenByOthers.length>0 ? "#34b7f1" : "#777";
+            path1.setAttribute("stroke", color); path2.setAttribute("stroke", color);
+            tickSvg.appendChild(path1); tickSvg.appendChild(path2);
             timeDiv.appendChild(tickSvg);
           } else {
-            // mark as seen
             markSeen(d.id);
           }
 
@@ -242,7 +165,27 @@
       });
     }
 
-    loadMessages(chatId);
+    // --- Send message
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+      if (!currentChatId) return alert("Start a chat first (search by email)");
+      await addDoc(collection(db, "privateChats", currentChatId, "messages"), {
+        senderUid: me.uid,
+        text,
+        timestamp: serverTimestamp(),
+        seenBy: [me.uid]
+      });
+      input.value = "";
+    }
+    sendBtn.addEventListener("click", sendMessage);
+    input.addEventListener("keypress", e => { if (e.key==="Enter") sendMessage(); });
+
+    // --- Mark seen
+    async function markSeen(docId) {
+      const msgRef = doc(db,"privateChats", currentChatId,"messages",docId);
+      await updateDoc(msgRef, { seenBy: arrayUnion(me.uid) });
+    }
   </script>
 </body>
 </html>
