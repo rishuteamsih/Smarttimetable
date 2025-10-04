@@ -1,105 +1,87 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Global College Chat</title>
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-    import {
-      getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Global Chat</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js" type="module"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js" type="module"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js" type="module"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; }
+    header { background: #18ab91; color: #fff; text-align: center; padding: 12px; font-size: 20px; }
+    #chat-box { height: 70vh; overflow-y: auto; background: #fff; margin: 15px; padding: 10px; border-radius: 8px; box-shadow: 0 0 6px rgba(0,0,0,0.1); }
+    .msg { margin: 8px 0; padding: 6px 10px; border-radius: 10px; max-width: 70%; }
+    .self { background: #dcf8c6; margin-left: auto; }
+    .other { background: #ececec; margin-right: auto; }
+    #input-area { display: flex; margin: 15px; }
+    input { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
+    button { background: #18ab91; color: white; border: none; border-radius: 8px; margin-left: 8px; padding: 10px 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>🌐 Global Chat</header>
+  <div id="chat-box"></div>
+  <div id="input-area">
+    <input id="msgInput" type="text" placeholder="Type a message..." />
+    <button id="sendBtn">Send</button>
+  </div>
 
-    // Use your existing Firebase config (same as in your index file)
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
     const firebaseConfig = {
       apiKey: "AIzaSyAFKmM22FUSQPYy-eMsBzcZN3bmAxglXl0",
       authDomain: "smart-timetable-266fe.firebaseapp.com",
-      projectId: "smart-timetable-266fe",
+      projectId: "smart-timetable-266fe"
     };
+
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const me = JSON.parse(localStorage.getItem("chatUser") || "{}");
-
-    // helper: show message if not logged-in
-    if (!me.uid) {
-      document.write('<p style="padding:20px;">Please login via SmartTimetable first (open from the dashboard).</p>');
-      throw new Error("not-logged-in");
+    // ✅ Get current user info saved from index.html
+    const user = JSON.parse(localStorage.getItem("chatUser"));
+    if (!user) {
+      alert("Please log in through Smart Timetable first.");
+      window.location.href = "index.html";
     }
 
-    // render HTML
-    document.head.insertAdjacentHTML('beforeend', `
-      <style>
-        body{font-family:Arial;margin:0;background:#f5f7fa}
-        header{padding:14px;text-align:center;background:#18ab91;color:#fff}
-        #messages{height:60vh;overflow:auto;padding:12px;margin:12px;background:#fff;border-radius:8px;border:1px solid #ddd}
-        .msg{margin:6px 0;padding:8px;border-radius:12px;display:block}
-        .meta{font-size:12px;color:#666}
-        #emojiBar{padding:8px;text-align:center}
-        #inputBar{position:fixed;left:10px;right:10px;bottom:10px;display:flex;gap:8px}
-        input{flex:1;padding:10px;border-radius:999px;border:1px solid #ccc}
-        button{padding:10px 14px;border-radius:999px;border:none;background:#18ab91;color:#fff}
-        .mine{background:#18ab91;color:#fff;align-self:flex-end}
-        .theirs{background:#e9ecef;color:#000;}
-      </style>
-    `);
+    const msgInput = document.getElementById("msgInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const chatBox = document.getElementById("chat-box");
 
-    document.body.insertAdjacentHTML('beforeend', `
-      <header><h2>Campus Chat</h2></header>
-      <div id="messages"></div>
-      <div id="emojiBar"></div>
-      <div id="inputBar">
-        <input id="messageInput" placeholder="Message or pick an emoji..." />
-        <button id="sendBtn">Send</button>
-      </div>
-    `);
-
-    // emoji set (10 emojis)
-    const emojis = ['😀','😂','😎','😍','😢','😡','🤔','🙌','🔥','👍'];
-    const emojiBar = document.getElementById('emojiBar');
-    emojis.forEach(e => {
-      const span = document.createElement('span');
-      span.textContent = e;
-      span.style.cursor = 'pointer';
-      span.style.padding = '6px';
-      span.style.fontSize = '20px';
-      span.addEventListener('click', ()=> {
-        const input = document.getElementById('messageInput');
-        input.value += e;
-        input.focus();
-      });
-      emojiBar.appendChild(span);
-    });
-
-    const messagesDiv = document.getElementById('messages');
-    const q = query(collection(db, 'globalChat'), orderBy('timestamp'));
-    onSnapshot(q, snap => {
-      messagesDiv.innerHTML = '';
-      snap.forEach(doc => {
-        const m = doc.data();
-        const div = document.createElement('div');
-        div.className = 'msg ' + (m.senderUid === me.uid ? 'mine' : 'theirs');
-        div.innerHTML = `<div class="meta">${escapeHtml(m.senderName || m.senderEmail || 'User')}</div>
-                         <div>${escapeHtml(m.text)}</div>`;
-        messagesDiv.appendChild(div);
-      });
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    });
-
-    document.getElementById('sendBtn').addEventListener('click', async () => {
-      const text = document.getElementById('messageInput').value.trim();
+    // Send message
+    sendBtn.onclick = async () => {
+      const text = msgInput.value.trim();
       if (!text) return;
-      await addDoc(collection(db, 'globalChat'), {
-        senderUid: me.uid,
-        senderName: me.name || '',
-        senderEmail: me.email || '',
-        text,
-        timestamp: serverTimestamp()
-      });
-      document.getElementById('messageInput').value = '';
-    });
+      try {
+        await addDoc(collection(db, "globalChat"), {
+          text,
+          senderName: user.name,
+          senderUid: user.uid,
+          timestamp: serverTimestamp()
+        });
+        msgInput.value = "";
+      } catch (err) {
+        alert("Error sending message: " + err.message);
+      }
+    };
 
-    function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m])); }
+    // Real-time message updates
+    const q = query(collection(db, "globalChat"), orderBy("timestamp", "asc"));
+    onSnapshot(q, (snapshot) => {
+      chatBox.innerHTML = "";
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const div = document.createElement("div");
+        div.classList.add("msg");
+        div.classList.add(data.senderUid === user.uid ? "self" : "other");
+        div.textContent = data.senderName + ": " + data.text;
+        chatBox.appendChild(div);
+      });
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
   </script>
-</head>
-<body></body>
+</body>
 </html>
