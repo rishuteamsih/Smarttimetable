@@ -1,81 +1,125 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chat App - WhatsApp Style</title>
-<style>
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #ece5dd;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
-
-  .chat-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    background: #efeae2;
-    border-radius: 10px;
-    width: 100%;
-    max-width: 480px;
-    margin: auto;
-    box-shadow: 0 0 8px rgba(0,0,0,0.2);
-  }
-
-  #messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .input-box {
-    display: flex;
-    padding: 10px;
-    background: #f0f0f0;
-  }
-
-  .input-box input {
-    flex: 1;
-    padding: 10px;
-    border: none;
-    outline: none;
-    border-radius: 20px;
-  }
-
-  .input-box button {
-    margin-left: 10px;
-    background: #128c7e;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    cursor: pointer;
-  }
-
-  .input-box button:hover {
-    background: #0d7568;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Private Chat</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #ece5dd;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: #128c7e;
+      color: #fff;
+    }
+    #backBtn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    #friendName {
+      flex: 1;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #efeae2;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 600px;
+      margin: auto;
+      box-shadow: 0 0 8px rgba(0,0,0,0.2);
+    }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+    .bubble {
+      margin: 6px 0;
+      padding: 10px 14px;
+      border-radius: 18px;
+      max-width: 70%;
+      word-wrap: break-word;
+      position: relative;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.2);
+    }
+    .mine {
+      background: #dcf8c6;
+      align-self: flex-end;
+    }
+    .theirs {
+      background: #fff;
+      align-self: flex-start;
+    }
+    .time {
+      font-size: 11px;
+      opacity: 0.7;
+      margin-top: 4px;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 4px;
+    }
+    .input-box {
+      display: flex;
+      padding: 8px 12px;
+      background: #f0f0f0;
+    }
+    .input-box input {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      outline: none;
+      border-radius: 20px;
+    }
+    .input-box button {
+      margin-left: 10px;
+      background: #128c7e;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 42px;
+      height: 42px;
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .input-box button:hover {
+      background: #0d7568;
+    }
+  </style>
 </head>
 <body>
+  <header>
+    <button id="backBtn">←</button>
+    <div id="friendName">Private Chat</div>
+  </header>
+
   <div class="chat-container">
     <div id="messages"></div>
-
     <div class="input-box">
       <input id="msgInput" type="text" placeholder="Type a message...">
       <button id="sendBtn">➤</button>
     </div>
   </div>
 
-  <!-- Firebase SDK -->
+  <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { 
@@ -83,139 +127,117 @@
       serverTimestamp, updateDoc, doc, arrayUnion 
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // 🔥 Your Firebase Config
+    // 🔥 Your Firebase config
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyAFKmM22FUSQPYy-eMsBzcZN3bmAxglXl0",
+      authDomain: "smart-timetable-266fe.firebaseapp.com",
+      projectId: "smart-timetable-266fe"
     };
-
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Dummy users for demo
-    const chatId = "demoChat";
-    const me = { uid: "user1", name: "Rishu" };
+    // Logged-in user (from localStorage, set in index.html after login)
+    const me = JSON.parse(localStorage.getItem("chatUser") || "{}");
+    if (!me.uid) { document.body.innerHTML="<p>Please login first.</p>"; throw "no-login"; }
+
+    // Dummy friend for demo (replace with your logic after selecting a friend)
+    const chatId = "demoChat"; 
     const friend = { uid: "user2", name: "Amit" };
+    document.getElementById("friendName").textContent = friend.name;
 
     const messagesDiv = document.getElementById("messages");
     const input = document.getElementById("msgInput");
     const sendBtn = document.getElementById("sendBtn");
 
+    // --- Back Button ---
+    document.getElementById("backBtn").addEventListener("click", () => {
+      window.location.href = "index (13).html"; // back to dashboard
+    });
+
     // --- Send Message ---
     async function sendMessage() {
       const text = input.value.trim();
       if (!text) return;
-
-      await addDoc(collection(db, 'privateChats', chatId, 'messages'), {
+      await addDoc(collection(db, "privateChats", chatId, "messages"), {
         senderUid: me.uid,
         text,
         timestamp: serverTimestamp(),
-        seenBy: [me.uid] // mark as seen by sender
+        seenBy: [me.uid]
       });
-
-      input.value = '';
+      input.value = "";
     }
-
     sendBtn.addEventListener("click", sendMessage);
-    input.addEventListener("keypress", e => {
-      if (e.key === 'Enter') sendMessage();
-    });
+    input.addEventListener("keypress", e => { if (e.key === "Enter") sendMessage(); });
 
-    // --- Mark as seen ---
+    // --- Mark message as seen ---
     async function markSeen(docId) {
-      const msgRef = doc(db, 'privateChats', chatId, 'messages', docId);
+      const msgRef = doc(db, "privateChats", chatId, "messages", docId);
       await updateDoc(msgRef, { seenBy: arrayUnion(me.uid) });
     }
 
     // --- Load Messages ---
     function loadMessages(chatId) {
-      const msgQ = query(collection(db, 'privateChats', chatId, 'messages'), orderBy('timestamp'));
+      const msgQ = query(collection(db, "privateChats", chatId, "messages"), orderBy("timestamp"));
       onSnapshot(msgQ, snap => {
-        messagesDiv.innerHTML = '';
-
+        messagesDiv.innerHTML = "";
         snap.forEach(d => {
           const m = d.data();
-          const div = document.createElement('div');
-          div.style.margin = '6px 0';
-          div.style.padding = '10px 12px';
-          div.style.borderRadius = '10px';
-          div.style.maxWidth = '70%';
-          div.style.wordWrap = 'break-word';
-          div.style.background = (m.senderUid === me.uid) ? '#18ab91' : '#e9ecef';
-          div.style.color = (m.senderUid === me.uid) ? '#fff' : '#000';
-          div.style.alignSelf = (m.senderUid === me.uid) ? 'flex-end' : 'flex-start';
+          const bubble = document.createElement("div");
+          bubble.className = "bubble " + (m.senderUid === me.uid ? "mine" : "theirs");
 
-          // --- Text ---
-          const msgText = document.createElement('div');
+          const msgText = document.createElement("div");
           msgText.textContent = m.text;
 
-          // --- Time ---
-          let timeText = '';
+          // time
+          let timeText = "";
           if (m.timestamp?.toDate) {
             const ts = m.timestamp.toDate();
-            const hours = ts.getHours() % 12 || 12;
-            const minutes = ts.getMinutes().toString().padStart(2, '0');
-            const ampm = ts.getHours() >= 12 ? 'PM' : 'AM';
-            timeText = `${hours}:${minutes} ${ampm}`;
+            const h = ts.getHours() % 12 || 12;
+            const min = ts.getMinutes().toString().padStart(2,"0");
+            const ampm = ts.getHours() >= 12 ? "PM" : "AM";
+            timeText = `${h}:${min} ${ampm}`;
           }
 
-          const msgTime = document.createElement('div');
-          msgTime.style.fontSize = '11px';
-          msgTime.style.opacity = '0.9';
-          msgTime.style.textAlign = 'right';
-          msgTime.style.display = 'flex';
-          msgTime.style.justifyContent = 'flex-end';
-          msgTime.style.alignItems = 'center';
-          msgTime.style.gap = '3px';
+          const timeDiv = document.createElement("div");
+          timeDiv.className = "time";
+          const tSpan = document.createElement("span");
+          tSpan.textContent = timeText;
+          timeDiv.appendChild(tSpan);
 
-          const timeSpan = document.createElement('span');
-          timeSpan.textContent = timeText;
-
-          // --- Ticks ---
+          // ticks (only for my messages)
           if (m.senderUid === me.uid) {
-            const tickSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            tickSvg.setAttribute('width', '14');
-            tickSvg.setAttribute('height', '14');
-            tickSvg.setAttribute('viewBox', '0 0 24 24');
-
-            const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path1.setAttribute('d', 'M1.5 13l4.5 4.5L15 8.5');
-            path1.setAttribute('fill', 'none');
-            path1.setAttribute('stroke-width', '2');
-            path1.setAttribute('stroke-linecap', 'round');
-            path1.setAttribute('stroke-linejoin', 'round');
-
-            const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path2.setAttribute('d', 'M9 13l4.5 4.5L22.5 8.5');
-            path2.setAttribute('fill', 'none');
-            path2.setAttribute('stroke-width', '2');
-            path2.setAttribute('stroke-linecap', 'round');
-            path2.setAttribute('stroke-linejoin', 'round');
-
+            const tickSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            tickSvg.setAttribute("width", "14");
+            tickSvg.setAttribute("height", "14");
+            tickSvg.setAttribute("viewBox", "0 0 24 24");
+            const path1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path1.setAttribute("d", "M1.5 13l4.5 4.5L15 8.5");
+            path1.setAttribute("fill", "none");
+            path1.setAttribute("stroke-width", "2");
+            path1.setAttribute("stroke-linecap", "round");
+            path1.setAttribute("stroke-linejoin", "round");
+            const path2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path2.setAttribute("d", "M9 13l4.5 4.5L22.5 8.5");
+            path2.setAttribute("fill", "none");
+            path2.setAttribute("stroke-width", "2");
+            path2.setAttribute("stroke-linecap", "round");
+            path2.setAttribute("stroke-linejoin", "round");
             const seenByOthers = (m.seenBy || []).filter(uid => uid !== me.uid);
-            const color = seenByOthers.length > 0 ? '#34b7f1' : '#ccc';
-            path1.setAttribute('stroke', color);
-            path2.setAttribute('stroke', color);
-
+            const color = seenByOthers.length > 0 ? "#34b7f1" : "#777";
+            path1.setAttribute("stroke", color);
+            path2.setAttribute("stroke", color);
             tickSvg.appendChild(path1);
             tickSvg.appendChild(path2);
-
-            msgTime.appendChild(timeSpan);
-            msgTime.appendChild(tickSvg);
+            timeDiv.appendChild(tickSvg);
           } else {
-            msgTime.appendChild(timeSpan);
+            // mark as seen
             markSeen(d.id);
           }
 
-          div.appendChild(msgText);
-          div.appendChild(msgTime);
-          messagesDiv.appendChild(div);
+          bubble.appendChild(msgText);
+          bubble.appendChild(timeDiv);
+          messagesDiv.appendChild(bubble);
         });
-
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
       });
     }
