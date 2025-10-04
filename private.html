@@ -24,7 +24,7 @@
     let me = JSON.parse(localStorage.getItem("chatUser") || "{}");
     let currentChatId = null;
 
-    // --- UI Setup ---
+    // --- Styles ---
     document.head.insertAdjacentHTML('beforeend', `
       <style>
         body{font-family:Arial;background:#f5f7fa;margin:0;display:flex;height:100vh}
@@ -42,6 +42,7 @@
       </style>
     `);
 
+    // --- UI Layout ---
     document.body.insertAdjacentHTML('beforeend', `
       <div id="sidebar">
         <header>
@@ -68,7 +69,7 @@
     const messagesDiv = document.getElementById('messages');
     const chatHeader = document.getElementById('chatHeader');
 
-    // --- Authentication ---
+    // --- Auth ---
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "login.html";
@@ -78,7 +79,10 @@
       localStorage.setItem("chatUser", JSON.stringify(me));
 
       await setDoc(doc(db, "users", me.uid), {
-        uid: me.uid, email: me.email, name: me.name, updated: serverTimestamp()
+        uid: me.uid,
+        email: me.email,
+        name: me.name,
+        updated: serverTimestamp()
       }, { merge: true });
 
       watchChatList();
@@ -90,7 +94,7 @@
       window.location.href = "login.html";
     };
 
-    // --- Watch all private chats (live) ---
+    // --- Watch chat list live ---
     function watchChatList() {
       const q = query(collection(db, 'privateChats'), where('members', 'array-contains', me.uid));
       onSnapshot(q, async (snap) => {
@@ -107,7 +111,7 @@
           const userDoc = await getDoc(doc(db, "users", otherUid));
           const userData = userDoc.exists() ? userDoc.data() : { email: "Unknown user" };
 
-          // Get unread count
+          // get messages for unread count + last message
           const msgsRef = collection(db, "privateChats", chatId, "messages");
           const msgsSnap = await getDocs(query(msgsRef, orderBy("timestamp", "desc")));
           let unreadCount = 0;
@@ -133,27 +137,31 @@
       });
     }
 
-    // --- Start Chat ---
+    // --- Open a chat manually ---
     async function startPrivateChat(chatId, friendUid, friendName) {
       currentChatId = chatId;
       chatHeader.textContent = friendName;
       loadMessages(chatId);
 
-      // Mark all messages as seen
+      // mark messages as seen
       const msgsRef = collection(db, 'privateChats', chatId, 'messages');
       const snap = await getDocs(msgsRef);
-      snap.forEach(async (d) => {
+      for (const d of snap.docs) {
         const data = d.data();
         if (!data.seenBy?.includes(me.uid)) {
           await updateDoc(d.ref, { seenBy: [...(data.seenBy || []), me.uid] });
         }
-      });
+      }
+
+      // refresh sidebar to remove unread badge
+      watchChatList();
     }
 
-    // --- Load chat messages ---
+    // --- Load messages (only for open chat) ---
     function loadMessages(chatId) {
       const msgQ = query(collection(db, 'privateChats', chatId, 'messages'), orderBy('timestamp'));
       onSnapshot(msgQ, snap => {
+        if (chatId !== currentChatId) return; // ✅ ignore updates for unopened chats
         messagesDiv.innerHTML = '';
         snap.forEach(d => {
           const m = d.data();
@@ -172,7 +180,7 @@
       });
     }
 
-    // --- Send message ---
+    // --- Send a message ---
     document.getElementById('sendBtn').addEventListener('click', async () => {
       const t = document.getElementById('msgInput').value.trim();
       if (!t) return;
@@ -187,7 +195,7 @@
       document.getElementById('msgInput').value = '';
     });
 
-    // --- Search user ---
+    // --- Search for user & start new chat ---
     document.getElementById('findBtn').addEventListener('click', async () => {
       const email = document.getElementById('searchEmail').value.trim().toLowerCase();
       if (!email) return alert('Enter email');
@@ -198,6 +206,7 @@
       const userDoc = snap.docs[0].data();
       const friendUid = snap.docs[0].id;
       if (friendUid === me.uid) return alert("You can't chat with yourself!");
+
       const chatId = [me.uid, friendUid].sort().join('_');
       await setDoc(doc(db, 'privateChats', chatId), { members: [me.uid, friendUid], created: serverTimestamp() }, { merge: true });
       startPrivateChat(chatId, friendUid, userDoc.name || userDoc.email);
