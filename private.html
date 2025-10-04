@@ -22,8 +22,49 @@
     const auth = getAuth(app);
 
     let me = JSON.parse(localStorage.getItem("chatUser") || "{}");
+    let currentChatId = null;
 
-    // --- Wait for login ---
+    // --- UI Setup ---
+    document.head.insertAdjacentHTML('beforeend', `
+      <style>
+        body{font-family:Arial;background:#f5f7fa;margin:0;display:flex;height:100vh}
+        header{padding:14px;text-align:center;background:#18ab91;color:#fff}
+        #sidebar{width:30%;border-right:1px solid #ddd;display:flex;flex-direction:column}
+        #chatList{flex:1;overflow:auto;padding:10px;background:#fff}
+        #chatList div{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
+        #chatList div:hover{background:#eafaf6}
+        #main{flex:1;display:flex;flex-direction:column}
+        #messages{flex:1;overflow:auto;padding:12px;margin:12px;background:#fff;border-radius:8px;border:1px solid #ddd}
+        #inputBar{display:flex;gap:8px;padding:10px;border-top:1px solid #ddd}
+        input{flex:1;padding:10px;border-radius:999px;border:1px solid #ccc}
+        button{padding:10px 14px;border-radius:999px;border:none;background:#18ab91;color:#fff}
+      </style>
+    `);
+
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="sidebar">
+        <header><h3>Chats</h3></header>
+        <div id="search">
+          <input id="searchEmail" placeholder="Search by email..." style="width:70%;margin:10px" />
+          <button id="findBtn">Find</button>
+        </div>
+        <div id="chatList"></div>
+      </div>
+      <div id="main">
+        <header><h3 id="chatHeader">Private Chat</h3></header>
+        <div id="messages"></div>
+        <div id="inputBar">
+          <input id="msgInput" placeholder="Type message..." />
+          <button id="sendBtn">Send</button>
+        </div>
+      </div>
+    `);
+
+    const messagesDiv = document.getElementById('messages');
+    const chatListDiv = document.getElementById('chatList');
+    const chatHeader = document.getElementById('chatHeader');
+
+    // --- Auth + Save user record ---
     onAuthStateChanged(auth, async (user) => {
       if (!user && !me.uid) {
         document.body.innerHTML = "<p>Please login via SmartTimetable first.</p>";
@@ -33,77 +74,70 @@
         me = { uid: user.uid, email: user.email, name: user.displayName || "Anonymous" };
         localStorage.setItem("chatUser", JSON.stringify(me));
 
-        // ensure user record exists in Firestore
         await setDoc(doc(db, "users", me.uid), {
           uid: me.uid,
           email: me.email,
           name: me.name,
           updated: serverTimestamp()
         }, { merge: true });
+
+        loadChatList();
       }
     });
 
-    // --- Styles ---
-    document.head.insertAdjacentHTML('beforeend', `
-      <style>
-        body{font-family:Arial;background:#f5f7fa;margin:0}
-        header{padding:14px;text-align:center;background:#18ab91;color:#fff}
-        #search{padding:12px}
-        #messages{height:55vh;overflow:auto;padding:12px;margin:12px;background:#fff;border-radius:8px;border:1px solid #ddd}
-        #inputBar{position:fixed;left:10px;right:10px;bottom:10px;display:flex;gap:8px}
-        input{flex:1;padding:10px;border-radius:999px;border:1px solid #ccc}
-        button{padding:10px 14px;border-radius:999px;border:none;background:#18ab91;color:#fff}
-      </style>
-    `);
+    // --- Load chat list ---
+    async function loadChatList() {
+      chatListDiv.innerHTML = "<p style='padding:10px;color:#888;'>Loading chats...</p>";
+      const q = query(collection(db, 'privateChats'), where('members', 'array-contains', me.uid));
+      const snap = await getDocs(q);
 
-    // --- UI ---
-    document.body.insertAdjacentHTML('beforeend', `
-      <header><h2>Private Chat</h2></header>
-      <div id="search">
-        <input id="searchEmail" placeholder="Enter friend's college email (example@college.edu)" />
-        <button id="findBtn">Find & Start Chat</button>
-      </div>
-      <div id="messages"></div>
-      <div id="inputBar">
-        <input id="msgInput" placeholder="Type message..." />
-        <button id="sendBtn">Send</button>
-      </div>
-    `);
+      if (snap.empty) {
+        chatListDiv.innerHTML = "<p style='padding:10px;color:#888;'>No chats yet</p>";
+        return;
+      }
 
-    // --- Chat logic ---
-    let currentChatId = null;
-    const messagesDiv = document.getElementById('messages');
+      chatListDiv.innerHTML = "";
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        const otherUid = data.members.find(uid => uid !== me.uid);
+        if (!otherUid) continue;
+        const userDoc = await getDoc(doc(db, "users", otherUid));
+        const userData = userDoc.exists() ? userDoc.data() : { email: "Unknown user" };
 
-    // Search user by email
+        const div = document.createElement('div');
+        div.textContent = userData.name || userData.email;
+        div.onclick = () => startPrivateChat(otherUid, userData.name || userData.email);
+        chatListDiv.appendChild(div);
+      }
+    }
+
+    // --- Search and Start Chat ---
     document.getElementById('findBtn').addEventListener('click', async () => {
       const email = document.getElementById('searchEmail').value.trim().toLowerCase();
       if (!email) return alert('Enter email');
-
-      const q = query(collection(db, 'users'), where('email', '==', email));
+      const q = query(collection(db,'users'), where('email','==', email));
       const snap = await getDocs(q);
-
       if (snap.empty) return alert('No user found with that email');
+
       const userDoc = snap.docs[0].data();
       const friendUid = snap.docs[0].id;
-
       if (friendUid === me.uid) return alert("You can't chat with yourself!");
 
       startPrivateChat(friendUid, userDoc.name || userDoc.email);
     });
 
+    // --- Open chat ---
     async function startPrivateChat(friendUid, friendName) {
-      // --- Single consistent collection name: privateChats ---
       const chatId = [me.uid, friendUid].sort().join('_');
       currentChatId = chatId;
+      chatHeader.textContent = friendName;
 
       const chatDocRef = doc(db, 'privateChats', chatId);
       const chatSnap = await getDoc(chatDocRef);
-
       if (!chatSnap.exists()) {
         await setDoc(chatDocRef, { members: [me.uid, friendUid], created: serverTimestamp() });
       }
 
-      // --- Listen to messages ---
       const msgQ = query(collection(db, 'privateChats', chatId, 'messages'), orderBy('timestamp'));
       onSnapshot(msgQ, snap => {
         messagesDiv.innerHTML = '';
@@ -115,8 +149,10 @@
           div.style.margin='6px 0';
           div.style.padding='8px';
           div.style.borderRadius='10px';
+          div.style.maxWidth='70%';
           div.style.background = (m.senderUid === me.uid) ? '#18ab91' : '#e9ecef';
           div.style.color = (m.senderUid === me.uid) ? '#fff' : '#000';
+          div.style.alignSelf = (m.senderUid === me.uid) ? 'flex-end' : 'flex-start';
           div.textContent = m.text;
           messagesDiv.appendChild(div);
         });
@@ -128,7 +164,7 @@
     document.getElementById('sendBtn').addEventListener('click', async ()=> {
       const t = document.getElementById('msgInput').value.trim();
       if (!t) return;
-      if (!currentChatId) return alert('Start a chat first (search by email).');
+      if (!currentChatId) return alert('Select or start a chat first.');
 
       await addDoc(collection(db, 'privateChats', currentChatId, 'messages'), {
         senderUid: me.uid,
@@ -137,6 +173,7 @@
       });
 
       document.getElementById('msgInput').value = '';
+      loadChatList(); // refresh sidebar to show latest chats
     });
   </script>
 </head>
