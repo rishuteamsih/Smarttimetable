@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Groups</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, onSnapshot, query, orderBy,
+      doc, updateDoc, arrayUnion, getDoc, serverTimestamp, getDocs
+    } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAFKmM22FUSQPYy-eMsBzcZN3bmAxglXl0",
+      authDomain: "smart-timetable-266fe.firebaseapp.com",
+      projectId: "smart-timetable-266fe",
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const me = JSON.parse(localStorage.getItem("chatUser") || "{}");
+    if (!me.uid) { document.write('<p>Please login via SmartTimetable first.</p>'); throw 'no-login'; }
+
+    document.head.insertAdjacentHTML('beforeend', `
+      <style>
+        body{font-family:Arial;background:#f5f7fa;margin:0;padding:12px}
+        header{padding:14px;text-align:center;background:#18ab91;color:#fff}
+        #controls{margin:12px 0}
+        #groupList{margin:8px 0}
+        #messages{height:45vh;overflow:auto;padding:12px;background:#fff;border-radius:8px;border:1px solid #ddd}
+        #inputBar{display:flex;gap:8px;margin-top:8px}
+        input{padding:8px;border-radius:999px;border:1px solid #ccc}
+        button{padding:8px 12px;border-radius:999px;border:none;background:#18ab91;color:#fff}
+      </style>
+    `);
+
+    document.body.insertAdjacentHTML('beforeend', `
+      <header><h2>Group Chats</h2></header>
+      <div id="controls">
+        <input id="groupName" placeholder="New group name" />
+        <button id="createBtn">Create Group</button>
+      </div>
+      <div id="groupList"></div>
+      <h3 id="groupTitle"></h3>
+      <div id="messages"></div>
+      <div id="inputBar">
+        <input id="msgInput" placeholder="Type message..." />
+        <button id="sendBtn">Send</button>
+      </div>
+    `);
+
+    let currentGroupId = null;
+    const groupListDiv = document.getElementById('groupList');
+    const messagesDiv = document.getElementById('messages');
+
+    document.getElementById('createBtn').addEventListener('click', async ()=> {
+      const name = document.getElementById('groupName').value.trim();
+      if (!name) return alert('Enter group name');
+      const ref = await addDoc(collection(db,'groups'), { name, creator: me.uid, members: [me.uid], created: serverTimestamp() });
+      document.getElementById('groupName').value = '';
+      alert('Group created');
+    });
+
+    // list groups
+    onSnapshot(collection(db, 'groups'), snap => {
+      groupListDiv.innerHTML = '';
+      snap.forEach(d => {
+        const g = d.data();
+        const btn = document.createElement('button');
+        btn.textContent = g.name + (g.members && g.members.includes(me.uid) ? ' (joined)' : '');
+        btn.style.margin = '4px';
+        btn.onclick = ()=> openGroup(d.id, g.name, g.members || []);
+        groupListDiv.appendChild(btn);
+      });
+    });
+
+    async function openGroup(id, name, members) {
+      currentGroupId = id;
+      document.getElementById('groupTitle').textContent = 'Group: ' + name;
+      // if not member, add self
+      if (!members.includes(me.uid)) {
+        await updateDoc(doc(db,'groups',id), { members: arrayUnion(me.uid) });
+      }
+      // listen messages
+      const msgQ = query(collection(db,'groups',id,'messages'), orderBy('timestamp'));
+      onSnapshot(msgQ, snap => {
+        messagesDiv.innerHTML = '';
+        snap.forEach(d => {
+          const m = d.data();
+          const div = document.createElement('div');
+          div.style.margin='6px 0'; div.style.padding='8px'; div.style.borderRadius='8px';
+          div.style.background = (m.senderUid === me.uid) ? '#18ab91' : '#e9ecef';
+          div.style.color = (m.senderUid === me.uid) ? '#fff' : '#000';
+          div.textContent = (m.senderName ? m.senderName + ': ' : '') + m.text;
+          messagesDiv.appendChild(div);
+        });
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      });
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', async ()=>{
+      const t = document.getElementById('msgInput').value.trim();
+      if (!t || !currentGroupId) return alert('Open a group first');
+      await addDoc(collection(db, 'groups', currentGroupId, 'messages'), {
+        senderUid: me.uid,
+        senderName: me.name || '',
+        text: t,
+        timestamp: serverTimestamp()
+      });
+      document.getElementById('msgInput').value='';
+    });
+  </script>
+</head>
+<body></body>
+</html>
