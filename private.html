@@ -9,7 +9,9 @@
       getFirestore, collection, addDoc, query, where, getDocs,
       doc, getDoc, setDoc, orderBy, onSnapshot, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
+    // --- Firebase Config ---
     const firebaseConfig = {
       apiKey: "AIzaSyAFKmM22FUSQPYy-eMsBzcZN3bmAxglXl0",
       authDomain: "smart-timetable-266fe.firebaseapp.com",
@@ -17,9 +19,31 @@
     };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const me = JSON.parse(localStorage.getItem("chatUser") || "{}");
-    if (!me.uid) { document.write('<p>Please login via SmartTimetable first.</p>'); throw 'not-login'; }
+    const auth = getAuth(app);
 
+    let me = JSON.parse(localStorage.getItem("chatUser") || "{}");
+
+    // --- Wait for login ---
+    onAuthStateChanged(auth, async (user) => {
+      if (!user && !me.uid) {
+        document.body.innerHTML = "<p>Please login via SmartTimetable first.</p>";
+        throw 'not-login';
+      }
+      if (user) {
+        me = { uid: user.uid, email: user.email, name: user.displayName || "Anonymous" };
+        localStorage.setItem("chatUser", JSON.stringify(me));
+
+        // ensure user record exists in Firestore
+        await setDoc(doc(db, "users", me.uid), {
+          uid: me.uid,
+          email: me.email,
+          name: me.name,
+          updated: serverTimestamp()
+        }, { merge: true });
+      }
+    });
+
+    // --- Styles ---
     document.head.insertAdjacentHTML('beforeend', `
       <style>
         body{font-family:Arial;background:#f5f7fa;margin:0}
@@ -32,6 +56,7 @@
       </style>
     `);
 
+    // --- UI ---
     document.body.insertAdjacentHTML('beforeend', `
       <header><h2>Private Chat</h2></header>
       <div id="search">
@@ -45,33 +70,40 @@
       </div>
     `);
 
+    // --- Chat logic ---
     let currentChatId = null;
     const messagesDiv = document.getElementById('messages');
 
+    // Search user by email
     document.getElementById('findBtn').addEventListener('click', async () => {
       const email = document.getElementById('searchEmail').value.trim().toLowerCase();
       if (!email) return alert('Enter email');
-      const q = query(collection(db,'users'), where('email','==', email));
+
+      const q = query(collection(db, 'users'), where('email', '==', email));
       const snap = await getDocs(q);
+
       if (snap.empty) return alert('No user found with that email');
       const userDoc = snap.docs[0].data();
       const friendUid = snap.docs[0].id;
+
+      if (friendUid === me.uid) return alert("You can't chat with yourself!");
+
       startPrivateChat(friendUid, userDoc.name || userDoc.email);
     });
 
     async function startPrivateChat(friendUid, friendName) {
-      // chat id uses sorted uids to keep single chat per pair
+      // --- Single consistent collection name: privateChats ---
       const chatId = [me.uid, friendUid].sort().join('_');
       currentChatId = chatId;
 
-      // ensure chat doc exists with members array
       const chatDocRef = doc(db, 'privateChats', chatId);
       const chatSnap = await getDoc(chatDocRef);
+
       if (!chatSnap.exists()) {
         await setDoc(chatDocRef, { members: [me.uid, friendUid], created: serverTimestamp() });
       }
 
-      // listen to messages
+      // --- Listen to messages ---
       const msgQ = query(collection(db, 'privateChats', chatId, 'messages'), orderBy('timestamp'));
       onSnapshot(msgQ, snap => {
         messagesDiv.innerHTML = '';
@@ -92,16 +124,19 @@
       });
     }
 
+    // --- Send message ---
     document.getElementById('sendBtn').addEventListener('click', async ()=> {
       const t = document.getElementById('msgInput').value.trim();
       if (!t) return;
       if (!currentChatId) return alert('Start a chat first (search by email).');
+
       await addDoc(collection(db, 'privateChats', currentChatId, 'messages'), {
         senderUid: me.uid,
         text: t,
         timestamp: serverTimestamp()
       });
-      document.getElementById('msgInput').value='';
+
+      document.getElementById('msgInput').value = '';
     });
   </script>
 </head>
