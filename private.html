@@ -7,7 +7,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
     import {
       getFirestore, collection, addDoc, query, where, onSnapshot,
-      doc, getDoc, setDoc, orderBy, serverTimestamp, getDocs
+      doc, getDoc, setDoc, orderBy, serverTimestamp, getDocs, updateDoc
     } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
@@ -24,15 +24,16 @@
     let me = JSON.parse(localStorage.getItem("chatUser") || "{}");
     let currentChatId = null;
 
-    // --- UI ---
+    // --- UI Setup ---
     document.head.insertAdjacentHTML('beforeend', `
       <style>
         body{font-family:Arial;background:#f5f7fa;margin:0;display:flex;height:100vh}
         header{padding:14px;text-align:center;background:#18ab91;color:#fff}
         #sidebar{width:30%;border-right:1px solid #ddd;display:flex;flex-direction:column}
         #chatList{flex:1;overflow:auto;padding:10px;background:#fff}
-        #chatList div{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
-        #chatList div:hover{background:#eafaf6}
+        .chatItem{padding:10px;border-bottom:1px solid #eee;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+        .chatItem:hover{background:#eafaf6}
+        .unreadCount{background:#18ab91;color:#fff;border-radius:50%;padding:4px 8px;font-size:12px}
         #main{flex:1;display:flex;flex-direction:column}
         #messages{flex:1;overflow:auto;padding:12px;margin:12px;background:#fff;border-radius:8px;border:1px solid #ddd;display:flex;flex-direction:column}
         #inputBar{display:flex;gap:8px;padding:10px;border-top:1px solid #ddd}
@@ -67,7 +68,7 @@
     const messagesDiv = document.getElementById('messages');
     const chatHeader = document.getElementById('chatHeader');
 
-    // --- Authentication + user creation ---
+    // --- Authentication ---
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "login.html";
@@ -77,10 +78,7 @@
       localStorage.setItem("chatUser", JSON.stringify(me));
 
       await setDoc(doc(db, "users", me.uid), {
-        uid: me.uid,
-        email: me.email,
-        name: me.name,
-        updated: serverTimestamp()
+        uid: me.uid, email: me.email, name: me.name, updated: serverTimestamp()
       }, { merge: true });
 
       watchChatList();
@@ -92,7 +90,7 @@
       window.location.href = "login.html";
     };
 
-    // --- Live chat list ---
+    // --- Watch all private chats (live) ---
     function watchChatList() {
       const q = query(collection(db, 'privateChats'), where('members', 'array-contains', me.uid));
       onSnapshot(q, async (snap) => {
@@ -103,46 +101,57 @@
         }
 
         for (const docSnap of snap.docs) {
+          const chatId = docSnap.id;
           const data = docSnap.data();
           const otherUid = data.members.find(uid => uid !== me.uid);
-          if (!otherUid) continue;
           const userDoc = await getDoc(doc(db, "users", otherUid));
           const userData = userDoc.exists() ? userDoc.data() : { email: "Unknown user" };
 
+          // Get unread count
+          const msgsRef = collection(db, "privateChats", chatId, "messages");
+          const msgsSnap = await getDocs(query(msgsRef, orderBy("timestamp", "desc")));
+          let unreadCount = 0;
+          let lastMessage = "";
+          msgsSnap.forEach(m => {
+            const msg = m.data();
+            if (!msg.seenBy?.includes(me.uid)) unreadCount++;
+            if (!lastMessage) lastMessage = msg.text;
+          });
+
           const div = document.createElement('div');
-          div.innerHTML = `<b>${userData.name || userData.email}</b>`;
-          div.onclick = () => startPrivateChat(otherUid, userData.name || userData.email);
+          div.className = "chatItem";
+          div.innerHTML = `
+            <div>
+              <b>${userData.name || userData.email}</b><br>
+              <small>${lastMessage || ''}</small>
+            </div>
+            ${unreadCount > 0 ? `<span class="unreadCount">${unreadCount}</span>` : ''}
+          `;
+          div.onclick = () => startPrivateChat(chatId, otherUid, userData.name || userData.email);
           chatListDiv.appendChild(div);
         }
       });
     }
 
-    // --- Search & start chat ---
-    document.getElementById('findBtn').addEventListener('click', async () => {
-      const email = document.getElementById('searchEmail').value.trim().toLowerCase();
-      if (!email) return alert('Enter email');
-      const q = query(collection(db,'users'), where('email','==', email));
-      const snap = await getDocs(q);
-      if (snap.empty) return alert('No user found with that email');
-
-      const userDoc = snap.docs[0].data();
-      const friendUid = snap.docs[0].id;
-      if (friendUid === me.uid) return alert("You can't chat with yourself!");
-      startPrivateChat(friendUid, userDoc.name || userDoc.email);
-    });
-
-    // --- Open a private chat ---
-    async function startPrivateChat(friendUid, friendName) {
-      const chatId = [me.uid, friendUid].sort().join('_');
+    // --- Start Chat ---
+    async function startPrivateChat(chatId, friendUid, friendName) {
       currentChatId = chatId;
       chatHeader.textContent = friendName;
+      loadMessages(chatId);
 
-      const chatDocRef = doc(db, 'privateChats', chatId);
-      const chatSnap = await getDoc(chatDocRef);
-      if (!chatSnap.exists()) {
-        await setDoc(chatDocRef, { members: [me.uid, friendUid], created: serverTimestamp() });
-      }
+      // Mark all messages as seen
+      const msgsRef = collection(db, 'privateChats', chatId, 'messages');
+      const snap = await getDocs(msgsRef);
+      snap.forEach(async (d) => {
+        const data = d.data();
+        if (!data.seenBy?.includes(me.uid)) {
+          await updateDoc(d.ref, { seenBy: [...(data.seenBy || []), me.uid] });
+        }
+      });
+    }
 
+    // --- Load chat messages ---
+    function loadMessages(chatId) {
       const msgQ = query(collection(db, 'privateChats', chatId, 'messages'), orderBy('timestamp'));
       onSnapshot(msgQ, snap => {
         messagesDiv.innerHTML = '';
@@ -163,7 +172,7 @@
       });
     }
 
-    // --- Send a message ---
+    // --- Send message ---
     document.getElementById('sendBtn').addEventListener('click', async () => {
       const t = document.getElementById('msgInput').value.trim();
       if (!t) return;
@@ -172,9 +181,26 @@
       await addDoc(collection(db, 'privateChats', currentChatId, 'messages'), {
         senderUid: me.uid,
         text: t,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        seenBy: [me.uid]
       });
       document.getElementById('msgInput').value = '';
+    });
+
+    // --- Search user ---
+    document.getElementById('findBtn').addEventListener('click', async () => {
+      const email = document.getElementById('searchEmail').value.trim().toLowerCase();
+      if (!email) return alert('Enter email');
+      const q = query(collection(db, 'users'), where('email', '==', email));
+      const snap = await getDocs(q);
+      if (snap.empty) return alert('No user found with that email');
+
+      const userDoc = snap.docs[0].data();
+      const friendUid = snap.docs[0].id;
+      if (friendUid === me.uid) return alert("You can't chat with yourself!");
+      const chatId = [me.uid, friendUid].sort().join('_');
+      await setDoc(doc(db, 'privateChats', chatId), { members: [me.uid, friendUid], created: serverTimestamp() }, { merge: true });
+      startPrivateChat(chatId, friendUid, userDoc.name || userDoc.email);
     });
   </script>
 </head>
