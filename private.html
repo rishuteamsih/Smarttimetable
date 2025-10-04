@@ -7,9 +7,9 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
     import {
       getFirestore, collection, addDoc, query, where, onSnapshot,
-      doc, getDoc, setDoc, orderBy, serverTimestamp
+      doc, getDoc, setDoc, orderBy, serverTimestamp, getDocs
     } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
     // --- Firebase Config ---
     const firebaseConfig = {
@@ -24,7 +24,7 @@
     let me = JSON.parse(localStorage.getItem("chatUser") || "{}");
     let currentChatId = null;
 
-    // --- UI Setup ---
+    // --- UI ---
     document.head.insertAdjacentHTML('beforeend', `
       <style>
         body{font-family:Arial;background:#f5f7fa;margin:0;display:flex;height:100vh}
@@ -34,7 +34,7 @@
         #chatList div{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
         #chatList div:hover{background:#eafaf6}
         #main{flex:1;display:flex;flex-direction:column}
-        #messages{flex:1;overflow:auto;padding:12px;margin:12px;background:#fff;border-radius:8px;border:1px solid #ddd}
+        #messages{flex:1;overflow:auto;padding:12px;margin:12px;background:#fff;border-radius:8px;border:1px solid #ddd;display:flex;flex-direction:column}
         #inputBar{display:flex;gap:8px;padding:10px;border-top:1px solid #ddd}
         input{flex:1;padding:10px;border-radius:999px;border:1px solid #ccc}
         button{padding:10px 14px;border-radius:999px;border:none;background:#18ab91;color:#fff}
@@ -43,7 +43,10 @@
 
     document.body.insertAdjacentHTML('beforeend', `
       <div id="sidebar">
-        <header><h3>Chats</h3></header>
+        <header>
+          <h3>Chats</h3>
+          <button id="logoutBtn" style="background:#fff;color:#18ab91;border:none;cursor:pointer;">Logout</button>
+        </header>
         <div id="search">
           <input id="searchEmail" placeholder="Search by email..." style="width:70%;margin:10px" />
           <button id="findBtn">Find</button>
@@ -60,67 +63,61 @@
       </div>
     `);
 
-    const messagesDiv = document.getElementById('messages');
     const chatListDiv = document.getElementById('chatList');
+    const messagesDiv = document.getElementById('messages');
     const chatHeader = document.getElementById('chatHeader');
 
-    // --- Auth + Save user record ---
+    // --- Authentication + user creation ---
     onAuthStateChanged(auth, async (user) => {
-      if (!user && !me.uid) {
-        document.body.innerHTML = "<p>Please login via SmartTimetable first.</p>";
-        throw 'not-login';
+      if (!user) {
+        window.location.href = "login.html";
+        return;
       }
-      if (user) {
-        me = { uid: user.uid, email: user.email, name: user.displayName || "Anonymous" };
-        localStorage.setItem("chatUser", JSON.stringify(me));
+      me = { uid: user.uid, email: user.email, name: user.displayName || "Anonymous" };
+      localStorage.setItem("chatUser", JSON.stringify(me));
 
-        await setDoc(doc(db, "users", me.uid), {
-          uid: me.uid,
-          email: me.email,
-          name: me.name,
-          updated: serverTimestamp()
-        }, { merge: true });
+      await setDoc(doc(db, "users", me.uid), {
+        uid: me.uid,
+        email: me.email,
+        name: me.name,
+        updated: serverTimestamp()
+      }, { merge: true });
 
-        watchChatList(); // ✅ start real-time listener
-      }
+      watchChatList();
     });
 
-    // --- Real-time Chat List (WhatsApp-style) ---
+    document.getElementById('logoutBtn').onclick = async () => {
+      await signOut(auth);
+      localStorage.removeItem('chatUser');
+      window.location.href = "login.html";
+    };
+
+    // --- Live chat list ---
     function watchChatList() {
       const q = query(collection(db, 'privateChats'), where('members', 'array-contains', me.uid));
       onSnapshot(q, async (snap) => {
+        chatListDiv.innerHTML = '';
         if (snap.empty) {
           chatListDiv.innerHTML = "<p style='padding:10px;color:#888;'>No chats yet</p>";
           return;
         }
 
-        chatListDiv.innerHTML = "";
         for (const docSnap of snap.docs) {
           const data = docSnap.data();
           const otherUid = data.members.find(uid => uid !== me.uid);
           if (!otherUid) continue;
-
           const userDoc = await getDoc(doc(db, "users", otherUid));
           const userData = userDoc.exists() ? userDoc.data() : { email: "Unknown user" };
 
-          // Get latest message
-          const messagesRef = collection(db, "privateChats", docSnap.id, "messages");
-          const latestQ = query(messagesRef, orderBy("timestamp", "desc"));
-          const latestSnap = await getDocs(latestQ);
-          let lastMsg = "";
-          if (!latestSnap.empty) {
-            lastMsg = latestSnap.docs[0].data().text;
-          }
-
           const div = document.createElement('div');
-          div.innerHTML = `<b>${userData.name || userData.email}</b><br><small>${lastMsg || ""}</small>`;
+          div.innerHTML = `<b>${userData.name || userData.email}</b>`;
           div.onclick = () => startPrivateChat(otherUid, userData.name || userData.email);
           chatListDiv.appendChild(div);
         }
       });
     }
 
-    // --- Search and Start Chat ---
+    // --- Search & start chat ---
     document.getElementById('findBtn').addEventListener('click', async () => {
       const email = document.getElementById('searchEmail').value.trim().toLowerCase();
       if (!email) return alert('Enter email');
@@ -131,11 +128,10 @@
       const userDoc = snap.docs[0].data();
       const friendUid = snap.docs[0].id;
       if (friendUid === me.uid) return alert("You can't chat with yourself!");
-
       startPrivateChat(friendUid, userDoc.name || userDoc.email);
     });
 
-    // --- Open chat ---
+    // --- Open a private chat ---
     async function startPrivateChat(friendUid, friendName) {
       const chatId = [me.uid, friendUid].sort().join('_');
       currentChatId = chatId;
@@ -167,8 +163,8 @@
       });
     }
 
-    // --- Send message ---
-    document.getElementById('sendBtn').addEventListener('click', async ()=> {
+    // --- Send a message ---
+    document.getElementById('sendBtn').addEventListener('click', async () => {
       const t = document.getElementById('msgInput').value.trim();
       if (!t) return;
       if (!currentChatId) return alert('Select or start a chat first.');
