@@ -7,18 +7,26 @@
   <style>
     body { margin:0; font-family:"Segoe UI",Arial,sans-serif; background:#ece5dd; display:flex; flex-direction:column; height:100vh; }
     header { display:flex; align-items:center; gap:10px; padding:12px; background:#128c7e; color:#fff; }
-    #backBtn { background:none; border:none; color:#fff; font-size:20px; cursor:pointer; }
+    #backBtn, #backListBtn { background:none; border:none; color:#fff; font-size:20px; cursor:pointer; }
     #friendName { flex:1; font-weight:600; font-size:16px; }
-    .chat-container { flex:1; display:flex; flex-direction:column; background:#efeae2; }
-    #searchBar { padding:10px; background:#f0f0f0; display:flex; gap:8px; }
-    #searchEmail { flex:1; padding:8px; border-radius:6px; border:1px solid #ccc; }
-    #findBtn { padding:8px 14px; border:none; border-radius:6px; background:#128c7e; color:#fff; cursor:pointer; }
-    #messages { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; }
+
+    /* Chat list */
+    #chatList { flex:1; overflow-y:auto; padding:10px; background:#fff; }
+    .chat-item { padding:12px; border-bottom:1px solid #eee; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+    .chat-info { flex:1; }
+    .chat-name { font-weight:600; }
+    .chat-last { font-size:13px; opacity:0.7; }
+    .chat-time { font-size:12px; opacity:0.6; margin-left:6px; }
+    .unread { background:#25d366; color:#fff; border-radius:10px; font-size:12px; padding:2px 6px; margin-left:8px; }
+
+    /* Messages */
+    #messages { flex:1; overflow-y:auto; padding:12px; display:none; flex-direction:column; }
     .bubble { margin:6px 0; padding:10px 14px; border-radius:18px; max-width:70%; word-wrap:break-word; position:relative; box-shadow:0 1px 1px rgba(0,0,0,0.2); }
     .mine { background:#dcf8c6; align-self:flex-end; }
     .theirs { background:#fff; align-self:flex-start; }
     .time { font-size:11px; opacity:0.7; margin-top:4px; display:flex; justify-content:flex-end; align-items:center; gap:4px; }
-    .input-box { display:flex; padding:8px 12px; background:#f0f0f0; }
+
+    .input-box { display:none; padding:8px 12px; background:#f0f0f0; }
     .input-box input { flex:1; padding:10px; border:none; outline:none; border-radius:20px; }
     .input-box button { margin-left:10px; background:#128c7e; color:white; border:none; border-radius:50%; width:42px; height:42px; cursor:pointer; font-size:18px; }
     .input-box button:hover { background:#0d7568; }
@@ -27,32 +35,30 @@
 <body>
   <header>
     <button id="backBtn">←</button>
-    <div id="friendName">Private Chat</div>
+    <div id="friendName">Chats</div>
+    <button id="backListBtn" style="display:none;">←</button>
   </header>
 
-  <div class="chat-container">
-    <!-- Search bar to find a friend -->
-    <div id="searchBar">
-      <input id="searchEmail" placeholder="Enter friend's email..." />
-      <button id="findBtn">Find</button>
-    </div>
+  <!-- Chat List (recent chats like WhatsApp) -->
+  <div id="chatList"></div>
 
-    <div id="messages"></div>
+  <!-- Messages -->
+  <div id="messages"></div>
 
-    <div class="input-box">
-      <input id="msgInput" type="text" placeholder="Type a message...">
-      <button id="sendBtn">➤</button>
-    </div>
+  <!-- Input -->
+  <div class="input-box">
+    <input id="msgInput" type="text" placeholder="Type a message...">
+    <button id="sendBtn">➤</button>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { 
-      getFirestore, collection, addDoc, query, where, getDocs, orderBy, onSnapshot, 
+      getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, 
       serverTimestamp, updateDoc, doc, arrayUnion, getDoc, setDoc 
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // Firebase config (same as your project)
+    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyAFKmM22FUSQPYy-eMsBzcZN3bmAxglXl0",
       authDomain: "smart-timetable-266fe.firebaseapp.com",
@@ -61,130 +67,171 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // logged-in user (saved in index.html)
     const me = JSON.parse(localStorage.getItem("chatUser") || "{}");
     if (!me.uid) { document.body.innerHTML="<p>Please login first.</p>"; throw "no-login"; }
 
     let currentChatId = null;
     let currentFriend = null;
+    let unsubMsg = null;
 
-    const backBtn = document.getElementById("backBtn");
-    const findBtn = document.getElementById("findBtn");
+    const chatListDiv = document.getElementById("chatList");
     const messagesDiv = document.getElementById("messages");
-    const input = document.getElementById("msgInput");
+    const inputBox = document.querySelector(".input-box");
+    const msgInput = document.getElementById("msgInput");
     const sendBtn = document.getElementById("sendBtn");
+    const friendNameDiv = document.getElementById("friendName");
+    const backBtn = document.getElementById("backBtn");
+    const backListBtn = document.getElementById("backListBtn");
 
-    // --- Back to student dashboard
-    backBtn.addEventListener("click", () => {
-      window.location.href = "index (13).html";
+    // Back to dashboard
+    backBtn.addEventListener("click", ()=> {
+      window.location.href="index (13).html";
     });
 
-    // --- Search for friend by email
-    findBtn.addEventListener("click", async () => {
-      const email = document.getElementById("searchEmail").value.trim().toLowerCase();
-      if (!email) return alert("Enter email");
-
-      const q = query(collection(db,"users"), where("email","==", email));
-      const snap = await getDocs(q);
-      if (snap.empty) return alert("No user found with that email");
-
-      const friendDoc = snap.docs[0];
-      currentFriend = { uid: friendDoc.id, ...friendDoc.data() };
-
-      // Update header with friend's name
-      document.getElementById("friendName").textContent = currentFriend.name || currentFriend.email;
-
-      // Start chat
-      startPrivateChat(currentFriend.uid);
+    // Back to chat list
+    backListBtn.addEventListener("click", ()=> {
+      if (unsubMsg) unsubMsg();
+      currentChatId=null; currentFriend=null;
+      friendNameDiv.textContent="Chats";
+      backListBtn.style.display="none";
+      chatListDiv.style.display="block";
+      messagesDiv.style.display="none";
+      inputBox.style.display="none";
     });
 
-    // --- Start a chat (creates chatId from 2 UIDs)
-    async function startPrivateChat(friendUid) {
-      const chatId = [me.uid, friendUid].sort().join("_");
-      currentChatId = chatId;
+    // Load recent chats (sorted by last message time)
+    function loadChats(){
+      const q = query(collection(db,"privateChats"), where("members","array-contains", me.uid));
+      onSnapshot(q, async (snap)=>{
+        chatListDiv.innerHTML="";
+        let chats=[];
+        for(const d of snap.docs){
+          const chat = d.data();
+          const chatId=d.id;
+          const friendUid = chat.members.find(uid=>uid!==me.uid);
+          const friendDoc = await getDoc(doc(db,"users",friendUid));
+          const friendData = friendDoc.data()||{};
+          chats.push({chatId, friendUid, friendData});
+        }
+        // load last messages
+        for(const c of chats){
+          const msgQ=query(collection(db,"privateChats",c.chatId,"messages"), orderBy("timestamp","desc"));
+          const snap=await getDoc(doc(db,"privateChats",c.chatId));
+        }
+        chats.forEach(async c=>{
+          const lastQ=query(collection(db,"privateChats",c.chatId,"messages"), orderBy("timestamp","desc"));
+          onSnapshot(lastQ, s=>{
+            let lastMsg=""; let lastTime=""; let unread=0;
+            s.forEach((m,i)=>{
+              if(i===0){
+                lastMsg=m.data().text;
+                if(m.data().timestamp?.toDate){
+                  const ts=m.data().timestamp.toDate();
+                  lastTime=ts.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+                }
+              }
+              if(m.data().senderUid!==me.uid && !(m.data().seenBy||[]).includes(me.uid)){
+                unread++;
+              }
+            });
+            const div=document.createElement("div");
+            div.className="chat-item";
+            const info=document.createElement("div");
+            info.className="chat-info";
+            info.innerHTML=`<div class="chat-name">${c.friendData.name||c.friendData.email}</div>
+                            <div class="chat-last">${lastMsg||"No messages yet"}</div>`;
+            div.appendChild(info);
+            const meta=document.createElement("div");
+            meta.style.display="flex"; meta.style.alignItems="center";
+            if(lastTime) meta.innerHTML+=`<span class="chat-time">${lastTime}</span>`;
+            if(unread>0) meta.innerHTML+=`<span class="unread">${unread}</span>`;
+            div.appendChild(meta);
+            div.addEventListener("click", ()=> startChat(c.chatId, c.friendUid, c.friendData));
+            chatListDiv.appendChild(div);
+          });
+        });
+      });
+    }
+    loadChats();
+
+    // Start a chat
+    async function startChat(chatId, friendUid, friendData){
+      currentChatId=chatId; currentFriend=friendData;
+      friendNameDiv.textContent=friendData.name||friendData.email;
+      backListBtn.style.display="inline";
+      chatListDiv.style.display="none";
+      messagesDiv.style.display="flex";
+      inputBox.style.display="flex";
 
       // Ensure chat doc exists
-      const chatRef = doc(db, "privateChats", chatId);
-      const chatSnap = await getDoc(chatRef);
-      if (!chatSnap.exists()) {
-        await setDoc(chatRef, { members: [me.uid, friendUid], created: serverTimestamp() });
-      }
+      const chatRef=doc(db,"privateChats",chatId);
+      const snap=await getDoc(chatRef);
+      if(!snap.exists()) await setDoc(chatRef,{members:[me.uid, friendUid], created:serverTimestamp()});
 
-      // Listen to messages
-      const msgQ = query(collection(db, "privateChats", chatId, "messages"), orderBy("timestamp"));
-      onSnapshot(msgQ, snap => {
-        messagesDiv.innerHTML = "";
-        snap.forEach(d => {
-          const m = d.data();
-          const bubble = document.createElement("div");
-          bubble.className = "bubble " + (m.senderUid === me.uid ? "mine" : "theirs");
-
-          const msgText = document.createElement("div");
-          msgText.textContent = m.text;
-
-          // time
-          let timeText = "";
-          if (m.timestamp?.toDate) {
-            const ts = m.timestamp.toDate();
-            const h = ts.getHours() % 12 || 12;
-            const min = ts.getMinutes().toString().padStart(2,"0");
-            const ampm = ts.getHours() >= 12 ? "PM" : "AM";
-            timeText = `${h}:${min} ${ampm}`;
+      if(unsubMsg) unsubMsg();
+      const msgQ=query(collection(db,"privateChats",chatId,"messages"), orderBy("timestamp"));
+      unsubMsg=onSnapshot(msgQ, snap=>{
+        messagesDiv.innerHTML="";
+        snap.forEach(d=>{
+          const m=d.data();
+          const bubble=document.createElement("div");
+          bubble.className="bubble "+(m.senderUid===me.uid?"mine":"theirs");
+          const msgText=document.createElement("div");
+          msgText.textContent=m.text;
+          let timeText="";
+          if(m.timestamp?.toDate){
+            const ts=m.timestamp.toDate();
+            const h=ts.getHours()%12||12;
+            const min=ts.getMinutes().toString().padStart(2,"0");
+            const ampm=ts.getHours()>=12?"PM":"AM";
+            timeText=`${h}:${min} ${ampm}`;
           }
-
-          const timeDiv = document.createElement("div");
-          timeDiv.className = "time";
-          const tSpan = document.createElement("span");
-          tSpan.textContent = timeText;
+          const timeDiv=document.createElement("div");
+          timeDiv.className="time";
+          const tSpan=document.createElement("span");
+          tSpan.textContent=timeText;
           timeDiv.appendChild(tSpan);
-
-          // ticks for my messages
-          if (m.senderUid === me.uid) {
-            const tickSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          if(m.senderUid===me.uid){
+            const tickSvg=document.createElementNS("http://www.w3.org/2000/svg","svg");
             tickSvg.setAttribute("width","14"); tickSvg.setAttribute("height","14"); tickSvg.setAttribute("viewBox","0 0 24 24");
-            const path1 = document.createElementNS("http://www.w3.org/2000/svg","path");
+            const path1=document.createElementNS("http://www.w3.org/2000/svg","path");
             path1.setAttribute("d","M1.5 13l4.5 4.5L15 8.5");
             path1.setAttribute("fill","none"); path1.setAttribute("stroke-width","2");
-            const path2 = document.createElementNS("http://www.w3.org/2000/svg","path");
+            const path2=document.createElementNS("http://www.w3.org/2000/svg","path");
             path2.setAttribute("d","M9 13l4.5 4.5L22.5 8.5");
             path2.setAttribute("fill","none"); path2.setAttribute("stroke-width","2");
-            const seenByOthers = (m.seenBy||[]).filter(uid=>uid!==me.uid);
-            const color = seenByOthers.length>0 ? "#34b7f1" : "#777";
-            path1.setAttribute("stroke", color); path2.setAttribute("stroke", color);
+            const seenByOthers=(m.seenBy||[]).filter(uid=>uid!==me.uid);
+            const color=seenByOthers.length>0?"#34b7f1":"#777";
+            path1.setAttribute("stroke",color); path2.setAttribute("stroke",color);
             tickSvg.appendChild(path1); tickSvg.appendChild(path2);
             timeDiv.appendChild(tickSvg);
           } else {
             markSeen(d.id);
           }
-
           bubble.appendChild(msgText);
           bubble.appendChild(timeDiv);
           messagesDiv.appendChild(bubble);
         });
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        messagesDiv.scrollTop=messagesDiv.scrollHeight;
       });
     }
 
-    // --- Send message
-    async function sendMessage() {
-      const text = input.value.trim();
-      if (!text) return;
-      if (!currentChatId) return alert("Start a chat first (search by email)");
-      await addDoc(collection(db, "privateChats", currentChatId, "messages"), {
-        senderUid: me.uid,
-        text,
-        timestamp: serverTimestamp(),
-        seenBy: [me.uid]
+    async function sendMessage(){
+      const text=msgInput.value.trim();
+      if(!text) return;
+      if(!currentChatId) return;
+      await addDoc(collection(db,"privateChats",currentChatId,"messages"),{
+        senderUid:me.uid,text,timestamp:serverTimestamp(),seenBy:[me.uid]
       });
-      input.value = "";
+      msgInput.value="";
     }
     sendBtn.addEventListener("click", sendMessage);
-    input.addEventListener("keypress", e => { if (e.key==="Enter") sendMessage(); });
+    msgInput.addEventListener("keypress", e=>{ if(e.key==="Enter") sendMessage(); });
 
-    // --- Mark seen
-    async function markSeen(docId) {
-      const msgRef = doc(db,"privateChats", currentChatId,"messages",docId);
-      await updateDoc(msgRef, { seenBy: arrayUnion(me.uid) });
+    async function markSeen(docId){
+      if(!currentChatId) return;
+      const msgRef=doc(db,"privateChats",currentChatId,"messages",docId);
+      await updateDoc(msgRef,{ seenBy: arrayUnion(me.uid) });
     }
   </script>
 </body>
