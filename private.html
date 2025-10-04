@@ -77,11 +77,13 @@
 
   <!-- Firebase SDK -->
   <script type="module">
-    // Import Firebase SDK
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, updateDoc, doc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import { 
+      getFirestore, collection, addDoc, query, orderBy, onSnapshot, 
+      serverTimestamp, updateDoc, doc, arrayUnion 
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-    // 🔥 Your Firebase Config (replace below with yours)
+    // 🔥 Your Firebase Config
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -91,11 +93,10 @@
       appId: "YOUR_APP_ID"
     };
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Dummy chat + user (for demo)
+    // Dummy users for demo
     const chatId = "demoChat";
     const me = { uid: "user1", name: "Rishu" };
     const friend = { uid: "user2", name: "Amit" };
@@ -113,7 +114,7 @@
         senderUid: me.uid,
         text,
         timestamp: serverTimestamp(),
-        seenBy: [me.uid]
+        seenBy: [me.uid] // mark as seen by sender
       });
 
       input.value = '';
@@ -124,10 +125,10 @@
       if (e.key === 'Enter') sendMessage();
     });
 
-    // --- Mark messages as seen when chat is opened ---
+    // --- Mark as seen ---
     async function markSeen(docId) {
       const msgRef = doc(db, 'privateChats', chatId, 'messages', docId);
-      await updateDoc(msgRef, { seenBy: [me.uid, friend.uid] });
+      await updateDoc(msgRef, { seenBy: arrayUnion(me.uid) });
     }
 
     // --- Load Messages ---
@@ -143,37 +144,29 @@
           div.style.padding = '10px 12px';
           div.style.borderRadius = '10px';
           div.style.maxWidth = '70%';
-          div.style.position = 'relative';
           div.style.wordWrap = 'break-word';
           div.style.background = (m.senderUid === me.uid) ? '#18ab91' : '#e9ecef';
           div.style.color = (m.senderUid === me.uid) ? '#fff' : '#000';
           div.style.alignSelf = (m.senderUid === me.uid) ? 'flex-end' : 'flex-start';
-          div.style.display = 'inline-block';
 
-          // --- Message Text ---
+          // --- Text ---
           const msgText = document.createElement('div');
           msgText.textContent = m.text;
 
-          // --- Time Formatting ---
+          // --- Time ---
           let timeText = '';
           if (m.timestamp?.toDate) {
             const ts = m.timestamp.toDate();
-            const diff = Date.now() - ts.getTime();
             const hours = ts.getHours() % 12 || 12;
             const minutes = ts.getMinutes().toString().padStart(2, '0');
             const ampm = ts.getHours() >= 12 ? 'PM' : 'AM';
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            timeText = days >= 1
-              ? `${days === 1 ? 'Yesterday' : ts.toLocaleDateString()}`
-              : `${hours}:${minutes} ${ampm}`;
+            timeText = `${hours}:${minutes} ${ampm}`;
           }
 
-          // --- Time + Tick Container ---
           const msgTime = document.createElement('div');
           msgTime.style.fontSize = '11px';
           msgTime.style.opacity = '0.9';
           msgTime.style.textAlign = 'right';
-          msgTime.style.marginTop = '4px';
           msgTime.style.display = 'flex';
           msgTime.style.justifyContent = 'flex-end';
           msgTime.style.alignItems = 'center';
@@ -182,35 +175,35 @@
           const timeSpan = document.createElement('span');
           timeSpan.textContent = timeText;
 
-          // --- WhatsApp double-tick SVG ---
-          const tickSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          tickSvg.setAttribute('width', '14');
-          tickSvg.setAttribute('height', '14');
-          tickSvg.setAttribute('viewBox', '0 0 24 24');
-          tickSvg.style.verticalAlign = 'middle';
-
-          const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path1.setAttribute('d', 'M1.5 13l4.5 4.5L15 8.5');
-          path1.setAttribute('fill', 'none');
-          path1.setAttribute('stroke-width', '2');
-          path1.setAttribute('stroke-linecap', 'round');
-          path1.setAttribute('stroke-linejoin', 'round');
-
-          const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path2.setAttribute('d', 'M9 13l4.5 4.5L22.5 8.5');
-          path2.setAttribute('fill', 'none');
-          path2.setAttribute('stroke-width', '2');
-          path2.setAttribute('stroke-linecap', 'round');
-          path2.setAttribute('stroke-linejoin', 'round');
-
-          tickSvg.appendChild(path1);
-          tickSvg.appendChild(path2);
-
+          // --- Ticks ---
           if (m.senderUid === me.uid) {
+            const tickSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            tickSvg.setAttribute('width', '14');
+            tickSvg.setAttribute('height', '14');
+            tickSvg.setAttribute('viewBox', '0 0 24 24');
+
+            const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path1.setAttribute('d', 'M1.5 13l4.5 4.5L15 8.5');
+            path1.setAttribute('fill', 'none');
+            path1.setAttribute('stroke-width', '2');
+            path1.setAttribute('stroke-linecap', 'round');
+            path1.setAttribute('stroke-linejoin', 'round');
+
+            const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path2.setAttribute('d', 'M9 13l4.5 4.5L22.5 8.5');
+            path2.setAttribute('fill', 'none');
+            path2.setAttribute('stroke-width', '2');
+            path2.setAttribute('stroke-linecap', 'round');
+            path2.setAttribute('stroke-linejoin', 'round');
+
             const seenByOthers = (m.seenBy || []).filter(uid => uid !== me.uid);
             const color = seenByOthers.length > 0 ? '#34b7f1' : '#ccc';
             path1.setAttribute('stroke', color);
             path2.setAttribute('stroke', color);
+
+            tickSvg.appendChild(path1);
+            tickSvg.appendChild(path2);
+
             msgTime.appendChild(timeSpan);
             msgTime.appendChild(tickSvg);
           } else {
@@ -227,7 +220,6 @@
       });
     }
 
-    // Start chat
     loadMessages(chatId);
   </script>
 </body>
