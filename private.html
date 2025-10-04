@@ -119,11 +119,19 @@
       align-items: center;
       gap: 4px;
     }
+    .tick {
+      font-size: 13px;
+    }
+    .seen {
+      color: #34b7f1;
+    }
 
     .input-box {
       display: none;
       padding: 8px 12px;
       background: #f0f0f0;
+      display: flex;
+      align-items: center;
     }
     .input-box input {
       flex: 1;
@@ -230,37 +238,58 @@
       });
     });
 
-    // 📜 Load recent chats (live)
+    // 📜 Load chats sorted + unread
     function loadChats() {
       const q = query(collection(db, "privateChats"), where("members", "array-contains", me.uid));
-      onSnapshot(q, snap => {
+      onSnapshot(q, async snap => {
         chatListDiv.innerHTML = "";
         const chats = [];
-        snap.forEach(d => {
-          chats.push({ id: d.id, data: d.data() });
+        snap.forEach(d => chats.push({ id: d.id, data: d.data() }));
+
+        // Sort properly
+        chats.sort((a, b) => {
+          const aTime = a.data.lastUpdated?.toMillis?.() || 0;
+          const bTime = b.data.lastUpdated?.toMillis?.() || 0;
+          return bTime - aTime;
         });
-        chats.sort((a, b) => b.data.lastUpdated?.seconds - a.data.lastUpdated?.seconds);
-        chats.forEach(async chat => {
+
+        for (const chat of chats) {
           const friendUid = chat.data.members.find(uid => uid !== me.uid);
           const friendDoc = await getDoc(doc(db, "users", friendUid));
           const friendData = friendDoc.data() || { name: "Unknown" };
+
+          // Count unread
+          const msgSnap = await getDocs(collection(db, "privateChats", chat.id, "messages"));
+          let unreadCount = 0;
+          msgSnap.forEach(m => {
+            const d = m.data();
+            if (!d.seenBy?.includes(me.uid) && d.senderUid !== me.uid) unreadCount++;
+          });
+
           const div = document.createElement("div");
           div.className = "chat-item";
-          div.innerHTML = `<div class="chat-info">
-            <div class="chat-name">${friendData.name}</div>
-            <div class="chat-last">${chat.data.lastMsg || "No messages yet"}</div>
-          </div>
-          <div>
-            <span class="chat-time">${chat.data.lastTime || ""}</span>
-          </div>`;
-          div.addEventListener("click", () => startChat(chat.id, friendUid, friendData));
+          div.innerHTML = `
+            <div class="chat-info">
+              <div class="chat-name">${friendData.name}</div>
+              <div class="chat-last">${chat.data.lastMsg || "No messages yet"}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="chat-time">${chat.data.lastTime || ""}</span>
+              ${unreadCount > 0 ? `<span class="unread">${unreadCount}</span>` : ""}
+            </div>
+          `;
+          div.addEventListener("click", () => {
+            startChat(chat.id, friendUid, friendData);
+            const badge = div.querySelector(".unread");
+            if (badge) badge.remove();
+          });
+
           chatListDiv.appendChild(div);
-        });
+        }
       });
     }
     loadChats();
 
-    // 💬 Start a new chat if not exists
     async function startNewChat(friend) {
       const chatRef = collection(db, "privateChats");
       const chatsSnap = await getDocs(query(chatRef, where("members", "in", [[me.uid, friend.uid], [friend.uid, me.uid]])));
@@ -274,7 +303,6 @@
       startChat(chatId, friend.uid, friend);
     }
 
-    // 🧠 Open existing chat
     function startChat(chatId, friendUid, friendData) {
       currentChatId = chatId;
       currentFriend = friendData;
@@ -293,16 +321,22 @@
           const m = d.data();
           const bubble = document.createElement("div");
           bubble.className = "bubble " + (m.senderUid === me.uid ? "mine" : "theirs");
-          bubble.innerHTML = `<div>${m.text}</div>`;
-          const timeDiv = document.createElement("div");
-          timeDiv.className = "time";
-          const t = m.timestamp?.toDate ? m.timestamp.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : "";
-          timeDiv.innerHTML = `<span>${t}</span>`;
-          bubble.appendChild(timeDiv);
+          const timeStr = m.timestamp?.toDate?.().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) || "";
+          
+          // ✅ Tick system
+          let tickHtml = "";
+          if (m.senderUid === me.uid) {
+            const isSeen = currentFriend && m.seenBy?.includes(currentFriend.uid);
+            tickHtml = `<span class="tick ${isSeen ? 'seen' : ''}">✔✔</span>`;
+          }
+
+          bubble.innerHTML = `<div>${m.text}</div>
+            <div class="time"><span>${timeStr}</span>${tickHtml}</div>`;
           messagesDiv.appendChild(bubble);
+
           if (m.senderUid !== me.uid) markSeen(d.id);
         });
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        messagesDiv.scrollTo({ top: messagesDiv.scrollHeight, behavior: "smooth" });
       });
     }
 
@@ -328,7 +362,11 @@
 
     async function markSeen(docId) {
       const msgRef = doc(db, "privateChats", currentChatId, "messages", docId);
-      await updateDoc(msgRef, { seenBy: arrayUnion(me.uid) });
+      try {
+        await updateDoc(msgRef, { seenBy: arrayUnion(me.uid) });
+      } catch (e) {
+        console.log("Error marking seen:", e);
+      }
     }
   </script>
 </body>
