@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Campus Connect – Unite Your Campus</title>
+  <link rel="icon" href="CAMPUS CONNECT.png" />
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;}
+    body{min-height:100vh;background:#f2f4f8;padding:20px;}
+    header{background:#18ab91;color:#fff;text-align:center;padding:20px;border-radius:12px;
+           box-shadow:0 4px 10px rgba(0,0,0,0.1);margin-bottom:20px;position:relative;}
+    header img{height:70px;display:block;margin:0 auto 8px;}
+    header h1{font-size:26px;margin-bottom:4px;}
+    header p{font-size:15px;opacity:0.95;}
+    .profile-btn{position:absolute;top:15px;right:20px;width:40px;height:40px;border-radius:50%;
+      background:#fff;color:#18ab91;font-weight:700;display:flex;align-items:center;justify-content:center;
+      cursor:pointer;border:none;}
+    .view{display:none;}
+    .container{position:relative;width:min(900px,95%);height:550px;background:#fff;border-radius:14px;
+      overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.08);margin:auto;}
+    .form-container{position:absolute;top:0;height:100%;transition:all 0.6s ease-in-out;}
+    .sign-in-container{left:0;width:50%;z-index:2;}
+    .sign-up-container{left:0;width:50%;opacity:0;z-index:1;}
+    form{height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;
+      padding:0 50px;text-align:center;}
+    form h1{color:#18ab91;margin-bottom:14px;font-weight:700;}
+    input,select{width:100%;max-width:320px;padding:12px 14px;margin:8px 0;border-radius:8px;
+      border:none;background:#f0f1f3;}
+    button{margin-top:14px;padding:12px 42px;border-radius:999px;border:none;background:#18ab91;
+      color:#fff;font-weight:700;cursor:pointer;transition:transform .08s ease;}
+    button:active{transform:scale(.98);}
+    button.ghost{background:transparent;border:2px solid rgba(255,255,255,0.35);color:#fff;padding:10px 30px;}
+    .overlay-container{position:absolute;top:0;left:50%;width:50%;height:100%;overflow:hidden;
+      transition:transform 0.6s ease-in-out;z-index:100;}
+    .overlay{position:relative;left:-100%;width:200%;height:100%;display:flex;align-items:center;
+      transition:transform 0.6s ease-in-out;background:linear-gradient(90deg,#20b39a 0%,#17a88a 100%);color:#fff;}
+    .overlay-panel{width:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:0 40px;text-align:center;}
+    .container.right-panel-active .sign-in-container{transform:translateX(100%);opacity:0;}
+    .container.right-panel-active .sign-up-container{transform:translateX(100%);opacity:1;z-index:5;}
+    .container.right-panel-active .overlay-container{transform:translateX(-100%);}
+    .container.right-panel-active .overlay{transform:translateX(50%);}
+    .chat-buttons{display:flex;flex-direction:column;gap:15px;max-width:250px;margin-top:10px;}
+    .chat-btn{display:block;padding:12px;text-align:center;border:2px solid #18ab91;border-radius:10px;
+      color:#18ab91;text-decoration:none;font-weight:600;background:#fff;transition:0.3s;}
+    .chat-btn:hover{background:#18ab91;color:#fff;}
+    .logout-btn{margin-top:30px;padding:12px 25px;border-radius:10px;border:none;background:#18ab91;
+      color:#fff;font-weight:600;cursor:pointer;transition:0.3s;}
+    .logout-btn:hover{background:#13967d;}
+    table{width:100%;border-collapse:collapse;margin-top:10px;}
+    th,td{padding:8px;border-bottom:1px solid #ccc;text-align:left;}
+    /* profile modal */
+    .profile-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);
+      display:none;align-items:center;justify-content:center;z-index:9999;}
+    .profile-box{background:#fff;padding:25px;border-radius:14px;width:90%;max-width:380px;
+      box-shadow:0 5px 20px rgba(0,0,0,0.15);}
+    .profile-box h2{color:#18ab91;margin-bottom:10px;}
+    .profile-box input,.profile-box textarea{width:100%;padding:10px;border-radius:8px;
+      border:1px solid #ccc;margin:6px 0;}
+    .profile-box button{margin-top:10px;padding:10px 20px;border:none;background:#18ab91;color:#fff;
+      border-radius:8px;cursor:pointer;}
+    .profile-box button:hover{background:#13967d;}
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginView" class="view" style="display:block;">
+  <header>
+    <img src="CAMPUS CONNECT.png"><h1>Campus Connect</h1><p>Unite Your Campus</p>
+  </header>
+  <div class="container" id="container">
+    <div class="form-container sign-up-container">
+      <form id="signupForm">
+        <h1>Create Account</h1>
+        <input id="signupName" type="text" placeholder="Name" required />
+        <input id="signupEmail" type="email" placeholder="Email" required />
+        <input id="signupPassword" type="password" placeholder="Password" required />
+        <select id="signupRole" required>
+          <option value="" disabled selected>Select role</option>
+          <option value="student">Student</option>
+          <option value="faculty">Faculty</option>
+          <option value="hod">HOD / Admin</option>
+        </select>
+        <button type="submit">Sign Up</button>
+      </form>
+    </div>
+    <div class="form-container sign-in-container">
+      <form id="loginForm">
+        <h1>Sign In</h1>
+        <input id="loginEmail" type="email" placeholder="Email" required />
+        <input id="loginPassword" type="password" placeholder="Password" required />
+        <button type="submit">Login</button>
+      </form>
+    </div>
+    <div class="overlay-container">
+      <div class="overlay">
+        <div class="overlay-panel overlay-left">
+          <h1>Welcome Back!</h1><p>Login with your account</p><button class="ghost" id="signIn">Sign In</button>
+        </div>
+        <div class="overlay-panel overlay-right">
+          <h1>Hello!</h1><p>Enter your details and start your journey</p>
+          <button class="ghost" id="signUp">Sign Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN / HOD DASHBOARD -->
+<div id="facultyView" class="view">
+  <header>
+    <img src="CAMPUS CONNECT.png"><h1>Campus Connect</h1><p>Admin / HOD Dashboard</p>
+    <button id="profileBtn" class="profile-btn">👤</button>
+  </header>
+  <main>
+    <h3>Pending Signups:</h3>
+    <table id="pendingTable"><thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
+    <section style="margin-top:20px;">
+      <h3>Chat Options</h3>
+      <div class="chat-buttons">
+        <a href="chat.html" target="_blank" class="chat-btn">🌐 Global Chat</a>
+        <a href="private.html" target="_blank" class="chat-btn">💬 Private Chat</a>
+        <a href="groups.html" target="_blank" class="chat-btn">👥 Groups</a>
+      </div>
+    </section>
+    <button id="logoutBtnFaculty" class="logout-btn">Logout</button>
+  </main>
+</div>
+
+<!-- STUDENT DASHBOARD -->
+<div id="studentView" class="view">
+  <header>
+    <img src="CAMPUS CONNECT.png"><h1>Campus Connect</h1><p>Student Dashboard</p>
+    <button id="profileBtn2" class="profile-btn">👤</button>
+  </header>
+  <main>
+    <section>
+      <h3>Chat Options</h3>
+      <div class="chat-buttons">
+        <a href="chat.html" target="_blank" class="chat-btn">🌐 Global Chat</a>
+        <a href="private.html" target="_blank" class="chat-btn">💬 Private Chat</a>
+        <a href="groups.html" target="_blank" class="chat-btn">👥 Groups</a>
+      </div>
+    </section>
+    <section style="margin-top:30px;">
+      <h3>📢 Notices</h3>
+      <div id="studentNotices" style="margin-top:10px;display:flex;flex-direction:column;gap:10px;"></div>
+    </section>
+    <section style="margin-top:30px;">
+      <h3>🎓 Joined Classes</h3>
+      <div id="joinedClasses" style="margin-top:10px;display:flex;flex-direction:column;gap:10px;"></div>
+    </section>
+    <button id="logoutBtnStudent" class="logout-btn">Logout</button>
+  </main>
+</div>
+
+<!-- Profile Modal -->
+<div id="profileModal" class="profile-modal">
+  <div class="profile-box">
+    <h2>Your Profile</h2>
+    <label>Name</label><input type="text" id="profName" />
+    <label>Email</label><input type="email" id="profEmail" disabled />
+    <label>Role</label><input type="text" id="profRole" disabled />
+    <label>Bio</label><textarea id="profBio" rows="3" placeholder="Write something..."></textarea>
+    <label>Profile Image</label><input type="file" id="profImage" accept="image/*" />
+    <button id="saveProfile">Save</button>
+    <button id="closeProfile" style="background:#ccc;color:#000;margin-left:8px;">Close</button>
+  </div>
+</div>
+
+<script type="module">
+import { auth, db, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+ signOut, onAuthStateChanged, doc, setDoc, getDoc, updateDoc,
+ collection, query, where, onSnapshot, serverTimestamp,
+ getUserProfile, saveUserProfile } from "./firebase.js";
+
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.style.display='none');
+ document.getElementById(id).style.display='block';}
+
+// SIGNUP
+signupForm.addEventListener('submit',async e=>{
+ e.preventDefault();
+ const name=signupName.value,email=signupEmail.value,pass=signupPassword.value,role=signupRole.value;
+ const cred=await createUserWithEmailAndPassword(auth,email,pass);
+ await setDoc(doc(db,'users',cred.user.uid),{name,email,role,approved:false,uid:cred.user.uid,createdAt:serverTimestamp()});
+ alert('Account created! Awaiting approval.');await signOut(auth);
+});
+
+// LOGIN
+loginForm.addEventListener('submit',async e=>{
+ e.preventDefault();
+ await signInWithEmailAndPassword(auth,loginEmail.value,loginPassword.value);
+});
+logoutBtnFaculty.onclick=()=>signOut(auth);logoutBtnStudent.onclick=()=>signOut(auth);
+const _c=document.getElementById('container');signUp.onclick=()=>_c.classList.add('right-panel-active');
+signIn.onclick=()=>_c.classList.remove('right-panel-active');
+
+// AUTH
+onAuthStateChanged(auth,async user=>{
+ if(!user)return showView('loginView');
+ const d=await getDoc(doc(db,'users',user.uid));if(!d.exists())return showView('loginView');
+ const p=d.data();if(!p.approved){alert('Waiting for approval');await signOut(auth);return;}
+ localStorage.setItem('chatUser',JSON.stringify({uid:user.uid,name:p.name,email:p.email,role:p.role}));
+ if(p.role==='admin'||p.role==='hod'){showView('facultyView');loadPending();}
+ else if(p.role==='faculty'){window.location.href='faculty_dashboard.html';}
+ else showView('studentView');
+});
+
+// Pending users (for admin)
+function loadPending(){
+ const body=document.querySelector("#pendingTable tbody");
+ const qPending=query(collection(db,"users"),where("approved","==",false));
+ onSnapshot(qPending,snap=>{
+  body.innerHTML="";
+  snap.forEach(docSnap=>{
+   const u=docSnap.data();
+   const tr=document.createElement("tr");
+   tr.innerHTML=`<td>${u.email}</td><td>${u.role}</td><td>${u.approved?"Approved":"Pending"}</td>
+   <td><button data-id="${u.uid}">Approve</button></td>`;
+   body.appendChild(tr);
+  });
+  body.querySelectorAll("button").forEach(btn=>{
+   btn.onclick=async e=>{
+    await updateDoc(doc(db,"users",e.target.dataset.id),{approved:true});
+    alert("User approved.");
+   };
+  });
+ });
+}
+
+// === Notices for students ===
+const studentNotices=document.getElementById("studentNotices");
+if(studentNotices){
+ const q=query(collection(db,"notices"),orderBy("createdAt","desc"));
+ onSnapshot(q,snap=>{
+  studentNotices.innerHTML="";
+  snap.forEach(docSnap=>{
+   const n=docSnap.data();
+   const div=document.createElement("div");
+   div.style="border:1px solid #ddd;padding:10px;border-radius:8px;background:#fff;";
+   div.innerHTML=`<strong>${n.title}</strong><p>${n.message}</p>
+   ${n.fileURL?`<a href="${n.fileURL}" target="_blank" style="color:#18ab91;">📎 Attachment</a>`:""}
+   <div style="font-size:12px;color:#777;margin-top:4px;">${n.createdAt?.toDate?.()?.toLocaleString?.()||""}</div>`;
+   studentNotices.appendChild(div);
+  });
+ });
+}
+
+// === Profile Modal ===
+const profileBtns=[document.getElementById("profileBtn"),document.getElementById("profileBtn2")];
+const profileModal=document.getElementById("profileModal");
+const saveProfile=document.getElementById("saveProfile");
+const closeProfile=document.getElementById("closeProfile");
+const profName=document.getElementById("profName");
+const profEmail=document.getElementById("profEmail");
+const profRole=document.getElementById("profRole");
+const profBio=document.getElementById("profBio");
+const profImage=document.getElementById("profImage");
+
+profileBtns.forEach(btn=>btn?.addEventListener("click",async()=>{
+ const user=JSON.parse(localStorage.getItem("chatUser")||"{}");
+ const profile=await getUserProfile(user.uid);
+ profName.value=profile?.name||user.name||"";profEmail.value=profile?.email||user.email||"";
+ profRole.value=profile?.role||user.role||"";profBio.value=profile?.bio||"";profileModal.style.display="flex";
+}));
+closeProfile.onclick=()=>profileModal.style.display="none";
+saveProfile.onclick=async()=>{
+ const user=JSON.parse(localStorage.getItem("chatUser")||"{}");
+ await saveUserProfile(user.uid,{name:profName.value.trim(),email:profEmail.value.trim(),
+  role:profRole.value.trim(),bio:profBio.value.trim(),updatedAt:new Date()});
+ alert("Profile saved!");profileModal.style.display="none";
+};
+</script>
+</body>
+</html>
